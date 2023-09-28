@@ -2121,7 +2121,7 @@ RuleMatcher &CombineRuleBuilder::addRuleMatcher(const PatternAlternatives &Alts,
   auto &RM = OutRMs.emplace_back(RuleDef.getLoc());
   addFeaturePredicates(RM);
   RM.setPermanentGISelFlags(GISF_IgnoreCopies);
-  RM.addRequiredSimplePredicate(getIsEnabledPredicateEnumName(RuleID));
+  //RM.addRequiredSimplePredicate(getIsEnabledPredicateEnumName(RuleID));
 
   std::string Comment;
   raw_string_ostream CommentOS(Comment);

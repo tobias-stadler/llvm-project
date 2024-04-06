@@ -86,6 +86,15 @@ public:
     });
     LLVM_DEBUG(CreatedInstrs.clear());
   }
+
+  void scheduleAllUsers(MachineInstr& MI) {
+    auto& MRI = MI.getMF()->getRegInfo();
+    for (auto& op : MI.defs()) {
+      for(auto& user : MRI.use_instructions(op.getReg())) {
+        WorkList.insert(&user);
+      }
+    }
+  }
 };
 
 Combiner::Combiner(MachineFunction &MF, CombinerInfo &CInfo,
@@ -166,7 +175,7 @@ bool Combiner::combineMachineInstrs() {
       WLObserver->reportFullyCreatedInstrs();
     }
     MFChanged |= Changed;
-  } while (Changed);
+  } while (false && Changed);
 
 #ifndef NDEBUG
   if (CSEInfo) {

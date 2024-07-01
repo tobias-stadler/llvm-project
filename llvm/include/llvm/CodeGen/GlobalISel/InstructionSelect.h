@@ -14,6 +14,8 @@
 #define LLVM_CODEGEN_GLOBALISEL_INSTRUCTIONSELECT_H
 
 #include "llvm/ADT/StringRef.h"
+#include "llvm/CodeGen/GlobalISel/GISelWorkList.h"
+#include "llvm/CodeGen/GlobalISel/InstructionSelector.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/Support/CodeGen.h"
@@ -55,10 +57,18 @@ public:
   bool runOnMachineFunction(MachineFunction &MF) override;
 
 protected:
+  class MIIteratorMaintainer;
+  class RetryListMaintainer;
+  using RetryListTy = GISelWorkList<16>;
+
+  RetryListTy RetryList;
+
   BlockFrequencyInfo *BFI = nullptr;
   ProfileSummaryInfo *PSI = nullptr;
 
   CodeGenOptLevel OptLevel = CodeGenOptLevel::None;
+
+  bool select(InstructionSelector &ISel, MachineInstr &MI);
 };
 } // End namespace llvm.
 

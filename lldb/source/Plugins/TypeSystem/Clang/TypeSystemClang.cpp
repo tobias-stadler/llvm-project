@@ -4956,66 +4956,31 @@ TypeSystemClang::GetBitSize(lldb::opaque_compiler_type_t type,
     return llvm::createStringError(
         "could not complete type %s",
         GetTypeName(type, base_name_only).AsCString(""));
-  if (GetCompleteType(type)) {
-    clang::QualType qual_type(GetCanonicalQualType(type));
-    const clang::Type::TypeClass type_class = qual_type->getTypeClass();
-    switch (type_class) {
-    case clang::Type::Record:
-      if (GetCompleteType(type))
-        return getASTContext().getTypeSize(qual_type);
-      else
-        return llvm::createStringError(
-            "could not complete type %s",
-            GetTypeName(type, base_name_only).AsCString(""));
-      break;
 
-    case clang::Type::ObjCInterface:
-    case clang::Type::ObjCObject: {
-      ExecutionContext exe_ctx(exe_scope);
-      Process *process = exe_ctx.GetProcessPtr();
-      if (process) {
-        if (ObjCLanguageRuntime *objc_runtime =
-                ObjCLanguageRuntime::Get(*process)) {
-          if (std::optional<uint64_t> bit_size =
-                  objc_runtime->GetTypeBitSize(GetType(qual_type)))
-            return *bit_size;
-        }
-      } else {
-        static bool g_printed = false;
-        if (!g_printed) {
-          StreamString s;
-          DumpTypeDescription(type, s);
+  clang::QualType qual_type(GetCanonicalQualType(type));
+  const clang::Type::TypeClass type_class = qual_type->getTypeClass();
+  switch (type_class) {
+  case clang::Type::ConstantArray:
+  case clang::Type::FunctionProto:
+  case clang::Type::Record:
+    return getASTContext().getTypeSize(qual_type);
+  case clang::Type::ObjCInterface:
+  case clang::Type::ObjCObject:
+    return GetObjCBitSize(qual_type, exe_scope);
+  case clang::Type::IncompleteArray: {
+    const uint64_t bit_size = getASTContext().getTypeSize(qual_type);
+    if (bit_size == 0)
+      return getASTContext().getTypeSize(
+          qual_type->getArrayElementTypeNoTypeQual()
+              ->getCanonicalTypeUnqualified());
 
-          llvm::outs() << "warning: trying to determine the size of type ";
-          llvm::outs() << s.GetString() << "\n";
-          llvm::outs() << "without a valid ExecutionContext. this is not "
-                          "reliable. please file a bug against LLDB.\n";
-          llvm::outs() << "backtrace:\n";
-          llvm::sys::PrintStackTrace(llvm::outs());
-          llvm::outs() << "\n";
-          g_printed = true;
-        }
-      }
-    }
-      [[fallthrough]];
-    default:
-      const uint32_t bit_size = getASTContext().getTypeSize(qual_type);
-      if (bit_size == 0) {
-        if (qual_type->isIncompleteArrayType())
-          return getASTContext().getTypeSize(
-              qual_type->getArrayElementTypeNoTypeQual()
-                  ->getCanonicalTypeUnqualified());
-      }
-      if (qual_type->isObjCObjectOrInterfaceType())
-        return bit_size +
-               getASTContext().getTypeSize(getASTContext().ObjCBuiltinClassTy);
-      // Function types actually have a size of 0, that's not an error.
-      if (qual_type->isFunctionProtoType())
-        return bit_size;
-      if (bit_size)
-        return bit_size;
-    }
+    return bit_size;
   }
+  default:
+    if (const uint64_t bit_size = getASTContext().getTypeSize(qual_type))
+      return bit_size;
+  }
+
   return llvm::createStringError(
       "could not get size of type %s",
       GetTypeName(type, base_name_only).AsCString(""));

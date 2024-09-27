@@ -1787,6 +1787,10 @@ def UncountedLambdaCapturesChecker : Checker<"UncountedLambdaCapturesChecker">,
 
 let ParentPackage = WebKitAlpha in {
 
+def NoUncheckedPtrMemberChecker : Checker<"NoUncheckedPtrMemberChecker">,
+  HelpText<"Check for no unchecked member variables.">,
+  Documentation<HasDocumentation>;
+
 def UncountedCallArgsChecker : Checker<"UncountedCallArgsChecker">,
   HelpText<"Check uncounted call arguments.">,
   Documentation<HasDocumentation>;

@@ -1799,4 +1799,8 @@ def UncountedLocalVarsChecker : Checker<"UncountedLocalVarsChecker">,
   HelpText<"Check uncounted local variables.">,
   Documentation<HasDocumentation>;
 
+def UncheckedLocalVarsChecker : Checker<"UncheckedLocalVarsChecker">,
+  HelpText<"Check unchecked local variables.">,
+  Documentation<HasDocumentation>;
+
 } // end alpha.webkit

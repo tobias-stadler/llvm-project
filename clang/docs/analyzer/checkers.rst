@@ -3442,8 +3442,8 @@ Raw pointers and references to an object which supports CheckedPtr or CheckedRef
 .. code-block:: cpp
 
  struct CheckableObj {
-   void incrementPtrCount() {}
-   void decrementPtrCount() {}
+   void incrementCheckedPtrCount() {}
+   void decrementCheckedPtrCount() {}
  };
 
  struct Foo {

@@ -54,7 +54,8 @@ public:
 
       bool TraverseCXXMethodDecl(CXXMethodDecl *CXXMD) {
         llvm::SaveAndRestore SavedDecl(ClsType);
-        ClsType = CXXMD->getThisType();
+        if (CXXMD && CXXMD->isInstance())
+          ClsType = CXXMD->getThisType();
         return Base::TraverseCXXMethodDecl(CXXMD);
       }
 

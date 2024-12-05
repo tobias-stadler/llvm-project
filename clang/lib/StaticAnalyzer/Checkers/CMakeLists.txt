@@ -135,6 +135,7 @@ add_clang_library(clangStaticAnalyzerCheckers
   VirtualCallChecker.cpp
   WebKit/RawPtrRefMemberChecker.cpp
   WebKit/ASTUtils.cpp
+  WebKit/MemoryUnsafeCastChecker.cpp
   WebKit/PtrTypesSemantics.cpp
   WebKit/RefCntblBaseVirtualDtorChecker.cpp
   WebKit/RawPtrRefCallArgsChecker.cpp

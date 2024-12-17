@@ -497,7 +497,14 @@ static Value *getTrueOrFalseValue(
 
   auto *CBO = BO->clone();
   auto CondIdx = SI.getConditionOpIndex();
-  CBO->setOperand(CondIdx, ConstantInt::get(CBO->getType(), 1));
+  auto *AuxI = cast<Instruction>(CBO->getOperand(CondIdx));
+  if (isa<ZExtInst>(AuxI)) {
+    CBO->setOperand(CondIdx, ConstantInt::get(CBO->getType(), 1));
+  } else {
+    assert(isa<SExtInst>(AuxI) &&
+           "Unexpected opcode");
+    CBO->setOperand(CondIdx, ConstantInt::get(CBO->getType(), -1));
+  }
 
   unsigned OtherIdx = 1 - CondIdx;
   if (auto *IV = dyn_cast<Instruction>(CBO->getOperand(OtherIdx))) {
@@ -755,6 +762,7 @@ void SelectOptimizeImpl::collectSelectGroups(BasicBlock &BB,
   // Auxiliary instruction are instructions that depends on a condition and have
   // zero or some constant value on True/False branch, such as:
   // * ZExt(1bit)
+  // * SExt(1bit)
   // * Not(1bit)
   struct SelectLikeInfo {
     Value *Cond;
@@ -770,7 +778,7 @@ void SelectOptimizeImpl::collectSelectGroups(BasicBlock &BB,
   // inserted position.
   auto ProcessSelectInfo = [&SelectInfo](Instruction *I) {
     Value *Cond;
-    if (match(I, m_OneUse(m_ZExt(m_Value(Cond)))) &&
+    if (match(I, m_OneUse(m_ZExtOrSExt(m_Value(Cond)))) &&
         Cond->getType()->isIntegerTy(1)) {
       bool Inverted = match(Cond, m_Not(m_Value(Cond)));
       return SelectInfo.insert({I, {Cond, true, Inverted, 0}}).first;
@@ -788,32 +796,30 @@ void SelectOptimizeImpl::collectSelectGroups(BasicBlock &BB,
 
     // An Or(zext(i1 X), Y) can also be treated like a select, with condition X
     // and values Y|1 and Y.
-    if (auto *BO = dyn_cast<BinaryOperator>(I)) {
-      switch (I->getOpcode()) {
-      case Instruction::Add:
-      case Instruction::Sub: {
-        Value *X;
-        if (!((PatternMatch::match(I->getOperand(0),
-                                   m_OneUse(m_ZExt(m_Value(X)))) ||
-               PatternMatch::match(I->getOperand(1),
-                                   m_OneUse(m_ZExt(m_Value(X))))) &&
-              X->getType()->isIntegerTy(1)))
-          return SelectInfo.end();
-        break;
-      }
-      case Instruction::Or:
-        if (BO->getType()->isIntegerTy(1) || BO->getOpcode() != Instruction::Or)
-          return SelectInfo.end();
-        break;
-      }
+    // `Aux` can be either `ZExt(1bit)` or `SExt(1bit)`, ValBitSize
+    // - 1` `BinOp` can be Add, Sub, Or
+    Value *X;
+    auto MatchZExtOrSExtPattern =
+        m_c_BinOp(m_Value(), m_OneUse(m_ZExtOrSExt(m_Value(X))));
+
+    // This check is unnecessary, but it prevents costly access to the
+    // SelectInfo map.
+    if ((match(I, MatchZExtOrSExtPattern) && X->getType()->isIntegerTy(1))) {
+      if (I->getOpcode() != Instruction::Add &&
+          I->getOpcode() != Instruction::Sub &&
+          I->getOpcode() != Instruction::Or)
+        return SelectInfo.end();
+
+      if (I->getOpcode() == Instruction::Or && I->getType()->isIntegerTy(1))
+        return SelectInfo.end();
 
       // Iterate through operands and find dependant on recognised sign
       // extending auxiliary select-like instructions. The operand index does
       // not matter for Add and Or. However, for Sub, we can only safely
       // transform when the operand is second.
-      unsigned Idx = BO->getOpcode() == Instruction::Sub ? 1 : 0;
+      unsigned Idx = I->getOpcode() == Instruction::Sub ? 1 : 0;
       for (; Idx < 2; Idx++) {
-        auto *Op = BO->getOperand(Idx);
+        auto *Op = I->getOperand(Idx);
         auto It = SelectInfo.find(Op);
         if (It != SelectInfo.end() && It->second.IsAuxiliary) {
           Cond = It->second.Cond;

@@ -99,7 +99,7 @@ class FrameRecognizerTestCase(TestBase):
         target, process, thread, _ = lldbutil.run_to_name_breakpoint(
             self, "foo", exe_name=exe
         )
-        frame = thread.GetSelectedFrame()
+        frame = thread.selected_frame
 
         self.expect("frame variable", substrs=["(int) a = 42", "(int) b = 56"])
 
@@ -169,7 +169,7 @@ class FrameRecognizerTestCase(TestBase):
         self.build()
 
         target, process, thread, _ = lldbutil.run_to_name_breakpoint(self, "nested")
-        frame = thread.GetSelectedFrame()
+        frame = thread.selected_frame
 
         # Sanity check.
         self.expect(
@@ -233,7 +233,6 @@ class FrameRecognizerTestCase(TestBase):
         target, process, thread, _ = lldbutil.run_to_name_breakpoint(
             self, "foo", exe_name=exe
         )
-        frame = thread.GetSelectedFrame()
 
         self.expect(
             "frame recognizer info 0",
@@ -243,7 +242,6 @@ class FrameRecognizerTestCase(TestBase):
         target, process, thread, _ = lldbutil.run_to_name_breakpoint(
             self, "bar", exe_name=exe
         )
-        frame = thread.GetSelectedFrame()
 
         self.expect(
             "frame recognizer info 0",
@@ -380,7 +378,7 @@ class FrameRecognizerTestCase(TestBase):
 
         opts = lldb.SBVariablesOptions()
         opts.SetIncludeRecognizedArguments(True)
-        frame = thread.GetSelectedFrame()
+        frame = thread.selected_frame
         variables = frame.GetVariables(opts)
 
         self.assertEqual(variables.GetSize(), 2)

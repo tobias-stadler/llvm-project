@@ -2540,7 +2540,9 @@ public:
   bool CheckFunctionCall(FunctionDecl *FDecl, CallExpr *TheCall,
                          const FunctionProtoType *Proto);
 
-  bool BuiltinVectorMath(CallExpr *TheCall, QualType &Res);
+  /// \param FPOnly restricts the arguments to floating-point types.
+  std::optional<QualType> BuiltinVectorMath(CallExpr *TheCall,
+                                            bool FPOnly = false);
   bool BuiltinVectorToScalarMath(CallExpr *TheCall);
 
   /// Handles the checks for format strings, non-POD arguments to vararg
@@ -2751,8 +2753,9 @@ private:
   ExprResult AtomicOpsOverloaded(ExprResult TheCallResult,
                                  AtomicExpr::AtomicOp Op);
 
-  bool BuiltinElementwiseMath(CallExpr *TheCall);
-  bool PrepareBuiltinReduceMathOneArgCall(CallExpr *TheCall);
+  bool BuiltinElementwiseMath(CallExpr *TheCall, bool FPOnly);
+  bool PrepareBuiltinReduceMathOneArgCall(CallExpr *TheCall,
+                                          bool FPOnly = false);
 
   bool BuiltinNonDeterministicValue(CallExpr *TheCall);
 
@@ -7740,9 +7743,14 @@ public:
     return K == ConditionKind::Switch ? Context.IntTy : Context.BoolTy;
   }
 
-  // UsualUnaryConversions - promotes integers (C99 6.3.1.1p2) and converts
-  // functions and arrays to their respective pointers (C99 6.3.2.1).
+  // UsualUnaryConversions - promotes integers (C99 6.3.1.1p2), converts
+  // functions and arrays to their respective pointers (C99 6.3.2.1), and
+  // promotes floating-piont types according to the language semantics.
   ExprResult UsualUnaryConversions(Expr *E);
+
+  // UsualUnaryFPConversions - promotes floating-point types according to the
+  // current language semantics.
+  ExprResult UsualUnaryFPConversions(Expr *E);
 
   /// CallExprUnaryConversions - a special case of an unary conversion
   /// performed on a function designator of a call expression.
@@ -7817,6 +7825,11 @@ public:
   // will create a runtime trap if the resulting type is not a POD type.
   ExprResult DefaultVariadicArgumentPromotion(Expr *E, VariadicCallType CT,
                                               FunctionDecl *FDecl);
+
+  // Check that the usual arithmetic conversions can be performed on this pair
+  // of expressions that might be of enumeration type.
+  void checkEnumArithmeticConversions(Expr *LHS, Expr *RHS, SourceLocation Loc,
+                                      Sema::ArithConvKind ACK);
 
   // UsualArithmeticConversions - performs the UsualUnaryConversions on it's
   // operands and then handles various conversions that are common to binary

@@ -1,54 +1,26 @@
-//===- CoroInternal.h - Internal Coroutine interfaces ---------*- C++ -*---===//
+//===- CoroShape.h - Coroutine info for lowering --------------*- C++ -*---===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-// Common definitions/declarations used internally by coroutine lowering passes.
+// This file declares the shape info struct that is required by many coroutine
+// utility methods.
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TRANSFORMS_COROUTINES_COROINTERNAL_H
-#define LLVM_LIB_TRANSFORMS_COROUTINES_COROINTERNAL_H
+#ifndef LLVM_TRANSFORMS_COROUTINES_COROSHAPE_H
+#define LLVM_TRANSFORMS_COROUTINES_COROSHAPE_H
 
-#include "CoroInstr.h"
-#include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/PassManager.h"
+#include "llvm/Transforms/Coroutines/CoroInstr.h"
 
 namespace llvm {
 
 class CallGraph;
 
 namespace coro {
-
-bool declaresAnyIntrinsic(const Module &M);
-bool declaresIntrinsics(const Module &M,
-                        const std::initializer_list<StringRef>);
-void replaceCoroFree(CoroIdInst *CoroId, bool Elide);
-
-/// Attempts to rewrite the location operand of debug intrinsics in terms of
-/// the coroutine frame pointer, folding pointer offsets into the DIExpression
-/// of the intrinsic.
-/// If the frame pointer is an Argument, store it into an alloca if
-/// OptimizeFrame is false.
-void salvageDebugInfo(
-    SmallDenseMap<Argument *, AllocaInst *, 4> &ArgToAllocaMap,
-    DbgVariableIntrinsic &DVI, bool OptimizeFrame, bool IsEntryPoint);
-void salvageDebugInfo(
-    SmallDenseMap<Argument *, AllocaInst *, 4> &ArgToAllocaMap,
-    DbgVariableRecord &DVR, bool OptimizeFrame, bool UseEntryValue);
-
-// Keeps data and helper functions for lowering coroutine intrinsics.
-struct LowererBase {
-  Module &TheModule;
-  LLVMContext &Context;
-  PointerType *const Int8Ptr;
-  FunctionType *const ResumeFnType;
-  ConstantPointerNull *const NullPtr;
-
-  LowererBase(Module &M);
-  CallInst *makeSubFnCall(Value *Arg, int Index, Instruction *InsertPt);
-};
 
 enum class ABI {
   /// The "resume-switch" lowering, where there are separate resume and
@@ -77,15 +49,45 @@ enum class ABI {
 
 // Holds structural Coroutine Intrinsics for a particular function and other
 // values used during CoroSplit pass.
-struct LLVM_LIBRARY_VISIBILITY Shape {
-  CoroBeginInst *CoroBegin;
+struct Shape {
+  CoroBeginInst *CoroBegin = nullptr;
   SmallVector<AnyCoroEndInst *, 4> CoroEnds;
   SmallVector<CoroSizeInst *, 2> CoroSizes;
   SmallVector<CoroAlignInst *, 2> CoroAligns;
   SmallVector<AnyCoroSuspendInst *, 4> CoroSuspends;
-  SmallVector<CallInst*, 2> SwiftErrorOps;
   SmallVector<CoroAwaitSuspendInst *, 4> CoroAwaitSuspends;
   SmallVector<CallInst *, 2> SymmetricTransfers;
+
+  // Values invalidated by replaceSwiftErrorOps()
+  SmallVector<CallInst *, 2> SwiftErrorOps;
+
+  void clear() {
+    CoroBegin = nullptr;
+    CoroEnds.clear();
+    CoroSizes.clear();
+    CoroAligns.clear();
+    CoroSuspends.clear();
+    CoroAwaitSuspends.clear();
+    SymmetricTransfers.clear();
+
+    SwiftErrorOps.clear();
+
+    FrameTy = nullptr;
+    FramePtr = nullptr;
+    AllocaSpillBlock = nullptr;
+  }
+
+  // Scan the function and collect the above intrinsics for later processing
+  void analyze(Function &F, SmallVectorImpl<CoroFrameInst *> &CoroFrames,
+               SmallVectorImpl<CoroSaveInst *> &UnusedCoroSaves);
+  // If for some reason, we were not able to find coro.begin, bailout.
+  void invalidateCoroutine(Function &F,
+                           SmallVectorImpl<CoroFrameInst *> &CoroFrames);
+  // Perform ABI related initial transformation
+  void initABI();
+  // Remove orphaned and unnecessary intrinsics
+  void cleanCoroutine(SmallVectorImpl<CoroFrameInst *> &CoroFrames,
+                      SmallVectorImpl<CoroSaveInst *> &UnusedCoroSaves);
 
   // Field indexes for special fields in the switch lowering.
   struct SwitchFieldIndex {
@@ -104,14 +106,11 @@ struct LLVM_LIBRARY_VISIBILITY Shape {
 
   coro::ABI ABI;
 
-  StructType *FrameTy;
+  StructType *FrameTy = nullptr;
   Align FrameAlign;
-  uint64_t FrameSize;
-  Value *FramePtr;
-  BasicBlock *AllocaSpillBlock;
-
-  /// This would only be true if optimization are enabled.
-  bool OptimizeFrame;
+  uint64_t FrameSize = 0;
+  Value *FramePtr = nullptr;
+  BasicBlock *AllocaSpillBlock = nullptr;
 
   struct SwitchLoweringStorage {
     SwitchInst *ResumeSwitch;
@@ -130,7 +129,6 @@ struct LLVM_LIBRARY_VISIBILITY Shape {
     Function *Dealloc;
     BasicBlock *ReturnBlock;
     bool IsFrameInlineInStorage;
-    ConstantInt* TypeId;
   };
 
   struct AsyncLoweringStorage {
@@ -158,8 +156,7 @@ struct LLVM_LIBRARY_VISIBILITY Shape {
   }
 
   AnyCoroIdRetconInst *getRetconCoroId() const {
-    assert(ABI == coro::ABI::Retcon ||
-           ABI == coro::ABI::RetconOnce);
+    assert(ABI == coro::ABI::Retcon || ABI == coro::ABI::RetconOnce);
     return cast<AnyCoroIdRetconInst>(CoroBegin->getId());
   }
 
@@ -184,8 +181,8 @@ struct LLVM_LIBRARY_VISIBILITY Shape {
 
   PointerType *getSwitchResumePointerType() const {
     assert(ABI == coro::ABI::Switch);
-  assert(FrameTy && "frame type not assigned");
-  return cast<PointerType>(FrameTy->getElementType(SwitchFieldIndex::Resume));
+    assert(FrameTy && "frame type not assigned");
+    return cast<PointerType>(FrameTy->getElementType(SwitchFieldIndex::Resume));
   }
 
   FunctionType *getResumeFunctionType() const {
@@ -205,22 +202,20 @@ struct LLVM_LIBRARY_VISIBILITY Shape {
     llvm_unreachable("Unknown coro::ABI enum");
   }
 
-  ArrayRef<Type*> getRetconResultTypes() const {
-    assert(ABI == coro::ABI::Retcon ||
-           ABI == coro::ABI::RetconOnce);
+  ArrayRef<Type *> getRetconResultTypes() const {
+    assert(ABI == coro::ABI::Retcon || ABI == coro::ABI::RetconOnce);
     auto FTy = CoroBegin->getFunction()->getFunctionType();
 
     // The safety of all this is checked by checkWFRetconPrototype.
     if (auto STy = dyn_cast<StructType>(FTy->getReturnType())) {
       return STy->elements().slice(1);
     } else {
-      return ArrayRef<Type*>();
+      return ArrayRef<Type *>();
     }
   }
 
-  ArrayRef<Type*> getRetconResumeTypes() const {
-    assert(ABI == coro::ABI::Retcon ||
-           ABI == coro::ABI::RetconOnce);
+  ArrayRef<Type *> getRetconResumeTypes() const {
+    assert(ABI == coro::ABI::Retcon || ABI == coro::ABI::RetconOnce);
 
     // The safety of all this is checked by checkWFRetconPrototype.
     auto FTy = RetconLowering.ResumePrototype->getFunctionType();
@@ -267,21 +262,21 @@ struct LLVM_LIBRARY_VISIBILITY Shape {
   void emitDealloc(IRBuilder<> &Builder, Value *Ptr, CallGraph *CG) const;
 
   Shape() = default;
-  explicit Shape(Function &F, bool OptimizeFrame = false)
-      : OptimizeFrame(OptimizeFrame) {
-    buildFrom(F);
+  explicit Shape(Function &F) {
+    SmallVector<CoroFrameInst *, 8> CoroFrames;
+    SmallVector<CoroSaveInst *, 2> UnusedCoroSaves;
+
+    analyze(F, CoroFrames, UnusedCoroSaves);
+    if (!CoroBegin) {
+      invalidateCoroutine(F, CoroFrames);
+      return;
+    }
+    cleanCoroutine(CoroFrames, UnusedCoroSaves);
   }
-  void buildFrom(Function &F);
 };
 
-bool defaultMaterializable(Instruction &V);
-void buildCoroutineFrame(
-    Function &F, Shape &Shape, TargetTransformInfo &TTI,
-    const std::function<bool(Instruction &)> &MaterializableCallback);
-CallInst *createMustTailCall(DebugLoc Loc, Function *MustTailCallFn,
-                             TargetTransformInfo &TTI,
-                             ArrayRef<Value *> Arguments, IRBuilder<> &);
-} // End namespace coro.
-} // End namespace llvm
+} // end namespace coro
 
-#endif
+} // end namespace llvm
+
+#endif // LLVM_TRANSFORMS_COROUTINES_COROSHAPE_H

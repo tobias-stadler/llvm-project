@@ -32,7 +32,7 @@ let Definition = "target_experimental" in {
     EnumValues<"OptionEnumValues(g_swift_pcm_validation_values)">,
     Desc<"Enable validation when loading Clang PCM files (-fvalidate-pch, -fmodules-check-relocated).">;
   def SwiftUseTasksPlugin: Property<"swift-tasks-plugin-enabled", "Boolean">,
-    DefaultTrue,
+    DefaultFalse,
     Desc<"Enables the swift plugin converting tasks into threads">;
 }
 

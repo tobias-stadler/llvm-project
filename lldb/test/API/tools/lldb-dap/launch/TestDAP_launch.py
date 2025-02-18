@@ -224,6 +224,7 @@ class TestDAP_launch(lldbdap_testcase.DAPTestCaseBase):
                 'arg[%i] "%s" not in "%s"' % (i + 1, quoted_arg, lines[i]),
             )
 
+    @skipIfWindows
     def test_environment_with_object(self):
         """
         Tests launch of a simple program with environment variables

@@ -5774,20 +5774,7 @@ public:
       return QualType();
     }
 
-    llvm::SaveAndRestore<bool> DoneLocal(Done, true);
-
-    T = BaseClass::TransformType(TLB, TL);
-
-    // Create a new started_by() pointer.
-
-    Expr *StartPtr = BuildStartPtrExpr();
-    if (!StartPtr)
-      return QualType();
-
-    QualType NewTy = SemaRef.Context.getDynamicRangePointerType(
-        T, StartPtr, /*EndPtr=*/nullptr, {NewStartPtrInfo}, {});
-    TLB.push<DynamicRangePointerTypeLoc>(NewTy);
-    return NewTy;
+    return BaseClass::TransformType(TLB, TL);
   }
 
   QualType TransformType(QualType T) { return BaseClass::TransformType(T); }
@@ -5829,8 +5816,42 @@ public:
     return NewTy;
   }
 
+  using TransformModifiedFnTy =
+      std::function<QualType(TypeLocBuilder &TLB, TypeLoc TL)>;
+  QualType TransformAttributedType(TypeLocBuilder &TLB, AttributedTypeLoc TL,
+                                   TransformModifiedFnTy TransformModifiedTypeFn) {
+    // Strip attr::PtrAutoAttr because the pointer is now marked __started_by
+    // as it is referred to by __ended_by.
+    const AttributedType *oldType = TL.getTypePtr();
+    if (oldType->getAttrKind() == attr::PtrAutoAttr && Level == 0 && !Done) {
+      return TransformModifiedTypeFn(TLB, TL.getModifiedLoc());
+    }
+    return BaseClass::TransformAttributedType(TLB, TL, TransformModifiedTypeFn);
+  }
+
+  QualType TransformAttributedType(TypeLocBuilder &TLB, AttributedTypeLoc TL) {
+    return TransformAttributedType(
+        TLB, TL, [&](TypeLocBuilder &TLB, TypeLoc ModifiedLoc) -> QualType {
+          return TransformType(TLB, ModifiedLoc);
+        });
+  }
+
   QualType TransformPointerType(TypeLocBuilder &TLB, PointerTypeLoc TL) {
     llvm::SaveAndRestore<unsigned> LevelLocal(Level);
+    llvm::SaveAndRestore<bool> DoneLocal(Done);
+    if (!Done && Level == 0) {
+      Expr *StartPtr = BuildStartPtrExpr();
+      if (!StartPtr)
+        return QualType();
+      Done = true;
+
+      QualType T = BaseClass::TransformPointerType(TLB, TL);
+
+      QualType NewTy = SemaRef.Context.getDynamicRangePointerType(
+          T, StartPtr, /*EndPtr=*/nullptr, {NewStartPtrInfo}, {});
+      TLB.push<DynamicRangePointerTypeLoc>(NewTy);
+      return NewTy;
+    }
     if (!Done) {
       assert(Level > 0);
       --Level;

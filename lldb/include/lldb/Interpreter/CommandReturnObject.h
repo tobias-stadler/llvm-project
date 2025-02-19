@@ -14,6 +14,7 @@
 #include "lldb/Utility/StreamString.h"
 #include "lldb/Utility/StreamTee.h"
 #include "lldb/Utility/StructuredData.h"
+#include "lldb/ValueObject/ValueObjectList.h"
 #include "lldb/lldb-private.h"
 
 #include "llvm/ADT/StringRef.h"
@@ -129,7 +130,7 @@ public:
       __attribute__((format(printf, 2, 3)));
 
   template <typename... Args>
-  void AppendMessageWithFormatv(const char *format, Args &&... args) {
+  void AppendMessageWithFormatv(const char *format, Args &&...args) {
     AppendMessage(llvm::formatv(format, std::forward<Args>(args)...).str());
   }
 
@@ -139,7 +140,7 @@ public:
   }
 
   template <typename... Args>
-  void AppendErrorWithFormatv(const char *format, Args &&... args) {
+  void AppendErrorWithFormatv(const char *format, Args &&...args) {
     AppendError(llvm::formatv(format, std::forward<Args>(args)...).str());
   }
 
@@ -154,6 +155,10 @@ public:
   std::optional<uint16_t> GetDiagnosticIndent() const {
     return m_diagnostic_indent;
   }
+
+  const ValueObjectList &GetValueObjectList() const { return m_value_objects; }
+
+  ValueObjectList &GetValueObjectList() { return m_value_objects; }
 
   lldb::ReturnStatus GetStatus() const;
 
@@ -186,6 +191,9 @@ private:
   std::optional<uint16_t> m_diagnostic_indent;
 
   lldb::ReturnStatus m_status = lldb::eReturnStatusStarted;
+
+  /// An optionally empty list of values produced by this command.
+  ValueObjectList m_value_objects;
 
   bool m_did_change_process_state = false;
   bool m_suppress_immediate_output = false;

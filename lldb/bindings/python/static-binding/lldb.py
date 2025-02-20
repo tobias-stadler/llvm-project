@@ -3858,6 +3858,10 @@ class SBCommandReturnObject(object):
         """
         return _lldb.SBCommandReturnObject_SetError(self, *args)
 
+    def GetValues(self, use_dynamic):
+        r"""GetValues(SBCommandReturnObject self, lldb::DynamicValueType use_dynamic) -> SBValueList"""
+        return _lldb.SBCommandReturnObject_GetValues(self, use_dynamic)
+
     def __repr__(self):
         r"""__repr__(SBCommandReturnObject self) -> std::string"""
         return _lldb.SBCommandReturnObject___repr__(self)

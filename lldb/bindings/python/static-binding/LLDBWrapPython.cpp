@@ -20113,6 +20113,41 @@ fail:
 }
 
 
+SWIGINTERN PyObject *_wrap_SBCommandReturnObject_GetValues(PyObject *self, PyObject *args) {
+  PyObject *resultobj = 0;
+  lldb::SBCommandReturnObject *arg1 = (lldb::SBCommandReturnObject *) 0 ;
+  lldb::DynamicValueType arg2 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  int val2 ;
+  int ecode2 = 0 ;
+  PyObject *swig_obj[2] ;
+  lldb::SBValueList result;
+  
+  (void)self;
+  if (!SWIG_Python_UnpackTuple(args, "SBCommandReturnObject_GetValues", 2, 2, swig_obj)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(swig_obj[0], &argp1,SWIGTYPE_p_lldb__SBCommandReturnObject, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "SBCommandReturnObject_GetValues" "', argument " "1"" of type '" "lldb::SBCommandReturnObject *""'"); 
+  }
+  arg1 = reinterpret_cast< lldb::SBCommandReturnObject * >(argp1);
+  ecode2 = SWIG_AsVal_int(swig_obj[1], &val2);
+  if (!SWIG_IsOK(ecode2)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode2), "in method '" "SBCommandReturnObject_GetValues" "', argument " "2"" of type '" "lldb::DynamicValueType""'");
+  } 
+  arg2 = static_cast< lldb::DynamicValueType >(val2);
+  {
+    SWIG_PYTHON_THREAD_BEGIN_ALLOW;
+    result = (arg1)->GetValues(arg2);
+    SWIG_PYTHON_THREAD_END_ALLOW;
+  }
+  resultobj = SWIG_NewPointerObj((new lldb::SBValueList(result)), SWIGTYPE_p_lldb__SBValueList, SWIG_POINTER_OWN |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
 SWIGINTERN PyObject *_wrap_SBCommandReturnObject___repr__(PyObject *self, PyObject *args) {
   PyObject *resultobj = 0;
   lldb::SBCommandReturnObject *arg1 = (lldb::SBCommandReturnObject *) 0 ;
@@ -96661,6 +96696,7 @@ static PyMethodDef SwigMethods[] = {
 		"SBCommandReturnObject_SetError(SBCommandReturnObject self, SBError error, char const * fallback_error_cstr=None)\n"
 		"SBCommandReturnObject_SetError(SBCommandReturnObject self, char const * error_cstr)\n"
 		""},
+	 { "SBCommandReturnObject_GetValues", _wrap_SBCommandReturnObject_GetValues, METH_VARARGS, "SBCommandReturnObject_GetValues(SBCommandReturnObject self, lldb::DynamicValueType use_dynamic) -> SBValueList"},
 	 { "SBCommandReturnObject___repr__", _wrap_SBCommandReturnObject___repr__, METH_O, "SBCommandReturnObject___repr__(SBCommandReturnObject self) -> std::string"},
 	 { "SBCommandReturnObject_SetImmediateOutputFile", _wrap_SBCommandReturnObject_SetImmediateOutputFile, METH_VARARGS, "\n"
 		"SBCommandReturnObject_SetImmediateOutputFile(SBCommandReturnObject self, SBFile file)\n"

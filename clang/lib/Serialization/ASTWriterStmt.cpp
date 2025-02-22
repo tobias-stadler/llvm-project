@@ -2320,8 +2320,8 @@ void ASTStmtWriter::VisitBoundsSafetyPointerPromotionExpr(
   VisitExpr(E);
   Record.push_back(E->getNumChildren());
   switch (E->getNumChildren()) {
-  case 3: Record.AddStmt(E->getLowerBound()); [[clang::fallthrough]];
-  case 2: Record.AddStmt(E->getUpperBound()); [[clang::fallthrough]];
+  case 3: Record.AddStmt(E->getLowerBound()); LLVM_FALLTHROUGH;
+  case 2: Record.AddStmt(E->getUpperBound()); LLVM_FALLTHROUGH;
   case 1: Record.AddStmt(E->getPointer()); break;
   default: llvm_unreachable("incorrect number of child nodes");
   }

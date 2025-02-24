@@ -1378,6 +1378,20 @@ void State::addInfoForInductions(BasicBlock &BB) {
 void State::addInfoFor(BasicBlock &BB) {
   addInfoForInductions(BB);
 
+  auto AddConditionFact = [&](DomTreeNode *DTN, CmpInst::Predicate Pred,
+                              Value *Op0, Value *Op1) {
+    WorkList.emplace_back(FactOrCheck::getConditionFact(DTN, Pred, Op0, Op1));
+    // In the case of NE zero, we can deduce SLT if SLE and SGT if SGE.
+    if (Pred == CmpInst::ICMP_NE && match(Op1, m_Zero())) {
+      ConditionTy Precond = {CmpInst::ICMP_SLE, Op0, Op1};
+      WorkList.emplace_back(FactOrCheck::getConditionFact(
+          DTN, CmpInst::ICMP_SLT, Op0, Op1, Precond));
+      Precond = {CmpInst::ICMP_SGE, Op0, Op1};
+      WorkList.emplace_back(FactOrCheck::getConditionFact(
+          DTN, CmpInst::ICMP_SGT, Op0, Op1, Precond));
+    }
+  };
+
   // True as long as long as the current instruction is guaranteed to execute.
   bool GuaranteedToExecute = true;
   // Queue conditions and assumes.
@@ -1418,8 +1432,7 @@ void State::addInfoFor(BasicBlock &BB) {
       if (GuaranteedToExecute) {
         // The assume is guaranteed to execute when BB is entered, hence Cond
         // holds on entry to BB.
-        WorkList.emplace_back(FactOrCheck::getConditionFact(
-            DT.getNode(I.getParent()), Pred, A, B));
+        AddConditionFact(DT.getNode(I.getParent()), Pred, A, B);
       } else {
         WorkList.emplace_back(
             FactOrCheck::getInstFact(DT.getNode(I.getParent()), &I));
@@ -1505,8 +1518,8 @@ void State::addInfoFor(BasicBlock &BB) {
       Value *V = Case.getCaseValue();
       if (!canAddSuccessor(BB, Succ))
         continue;
-      WorkList.emplace_back(FactOrCheck::getConditionFact(
-          DT.getNode(Succ), CmpInst::ICMP_EQ, Switch->getCondition(), V));
+      AddConditionFact(DT.getNode(Succ), CmpInst::ICMP_EQ,
+                       Switch->getCondition(), V);
     }
     return;
   }
@@ -1553,8 +1566,7 @@ void State::addInfoFor(BasicBlock &BB) {
             V = new ZExtInst(V, PN.getType());
             ExtraCmps.push_back(cast<Instruction>(V));
           }
-          WorkList.push_back(FactOrCheck::getConditionFact(
-              DT.getNode(&BB), CmpInst::ICMP_ULE, &PN, V));
+          AddConditionFact(DT.getNode(&BB), CmpInst::ICMP_ULE, &PN, V);
         }
       }
 
@@ -1566,12 +1578,10 @@ void State::addInfoFor(BasicBlock &BB) {
           V && !NeedZExt &&
           (!PN.getType()->isPointerTy() || V->getType() == PN.getType());
       if (CanBuildCmp && SE.isKnownPredicate(CmpInst::ICMP_SGE, IV, StartV)) {
-        WorkList.push_back(FactOrCheck::getConditionFact(
-            DT.getNode(&BB), CmpInst::ICMP_SGE, &PN, V));
+        AddConditionFact(DT.getNode(&BB), CmpInst::ICMP_SGE, &PN, V);
       }
       if (CanBuildCmp && SE.isKnownPredicate(CmpInst::ICMP_UGE, IV, StartV)) {
-        WorkList.push_back(FactOrCheck::getConditionFact(
-            DT.getNode(&BB), CmpInst::ICMP_UGE, &PN, V));
+        AddConditionFact(DT.getNode(&BB), CmpInst::ICMP_UGE, &PN, V);
       }
     }
   }
@@ -1625,11 +1635,11 @@ void State::addInfoFor(BasicBlock &BB) {
       while (!CondWorkList.empty()) {
         Value *Cur = CondWorkList.pop_back_val();
         if (auto *Cmp = dyn_cast<ICmpInst>(Cur)) {
-          WorkList.emplace_back(FactOrCheck::getConditionFact(
+          AddConditionFact(
               DT.getNode(Successor),
               IsOr ? CmpInst::getInversePredicate(Cmp->getPredicate())
                    : Cmp->getPredicate(),
-              Cmp->getOperand(0), Cmp->getOperand(1)));
+              Cmp->getOperand(0), Cmp->getOperand(1));
           continue;
         }
         if (IsOr && match(Cur, m_LogicalOr(m_Value(Op0), m_Value(Op1)))) {
@@ -1652,15 +1662,13 @@ void State::addInfoFor(BasicBlock &BB) {
     return;
   if (canAddSuccessor(BB, Br->getSuccessor(0))) {
     addPointerBoundInfoFromOverflowCheck(CmpI, DT.getNode(Br->getSuccessor(0)));
-    WorkList.emplace_back(FactOrCheck::getConditionFact(
-        DT.getNode(Br->getSuccessor(0)), CmpI->getPredicate(),
-        CmpI->getOperand(0), CmpI->getOperand(1)));
+    AddConditionFact(DT.getNode(Br->getSuccessor(0)), CmpI->getPredicate(),
+                     CmpI->getOperand(0), CmpI->getOperand(1));
   }
   if (canAddSuccessor(BB, Br->getSuccessor(1)))
-    WorkList.emplace_back(FactOrCheck::getConditionFact(
-        DT.getNode(Br->getSuccessor(1)),
-        CmpInst::getInversePredicate(CmpI->getPredicate()), CmpI->getOperand(0),
-        CmpI->getOperand(1)));
+    AddConditionFact(DT.getNode(Br->getSuccessor(1)),
+                     CmpInst::getInversePredicate(CmpI->getPredicate()),
+                     CmpI->getOperand(0), CmpI->getOperand(1));
 }
 
 #ifndef NDEBUG
@@ -1910,6 +1918,25 @@ static bool checkAndReplaceCondition(
           checkCondition(Cmp->getPredicate(), Cmp->getOperand(0),
                          Cmp->getOperand(1), Cmp, Info))
     return ReplaceCmpWithConstant(Cmp, *ImpliedCondition);
+
+  // If the predicate is unsigned and both operands are >= 0, then we can also
+  // make use of the signed predicate information.
+  if (Cmp->isUnsigned()) {
+    auto IsGE = [&](Value *Op) {
+      if (!Op->getType()->isIntegerTy())
+        return false;
+      auto Cond = checkCondition(CmpInst::ICMP_SGE, Op,
+                                 ConstantInt::get(Op->getType(), 0), Cmp, Info);
+      return Cond && *Cond;
+    };
+    if (IsGE(Cmp->getOperand(0)) && IsGE(Cmp->getOperand(1))) {
+      if (auto ImpliedCondition =
+              checkCondition(Cmp->getSignedPredicate(), Cmp->getOperand(0),
+                             Cmp->getOperand(1), Cmp, Info))
+        return ReplaceCmpWithConstant(Cmp, *ImpliedCondition);
+    }
+  }
+
   return false;
 }
 

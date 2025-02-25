@@ -38,61 +38,31 @@ void array_member_access_can_remove(struct buf *bp) {
      bp->arr[i] = i;
 }
 
+// rdar://138776402
 // CHECK-LABEL: @array_member_access_trap_on_last_iter(
-// CHECK-NEXT:  cont1:
-// CHECK-NEXT:    [[UPPER:%.*]] = getelementptr inbounds i8, ptr [[BP:%.*]], i64 44
-// CHECK-NEXT:    [[ARR:%.*]] = getelementptr inbounds i8, ptr [[BP]], i64 4
+// CHECK-NEXT:  trap:
+// CHECK-NEXT:    [[ARR:%.*]] = getelementptr inbounds i8, ptr [[BP:%.*]], i64 4
 // CHECK-NEXT:    store i32 0, ptr [[ARR]], align 4, {{!tbaa ![0-9]+}}
 // CHECK-NEXT:    [[ARRAYIDX_1:%.*]] = getelementptr i8, ptr [[BP]], i64 8
-// CHECK-NEXT:    [[TMP0:%.*]] = icmp ult ptr [[ARRAYIDX_1]], [[UPPER]], {{!annotation ![0-9]+}}
-// CHECK-NEXT:    br i1 [[TMP0]], label [[CONT1_1:%.*]], label [[TRAP:%.*]], {{!annotation ![0-9]+}}
-// CHECK:       trap:
-// CHECK-NEXT:    tail call void @llvm.ubsantrap(i8 25) {{#[0-9]+}}, {{!annotation ![0-9]+}}
-// CHECK-NEXT:    unreachable, {{!annotation ![0-9]+}}
-// rdar://138776402
-// CHECK:       cont1.1:
 // CHECK-NEXT:    store i32 1, ptr [[ARRAYIDX_1]], align 4, {{!tbaa ![0-9]+}}
 // CHECK-NEXT:    [[ARRAYIDX_2:%.*]] = getelementptr i8, ptr [[BP]], i64 12
-// CHECK-NEXT:    [[TMP1:%.*]] = icmp ult ptr [[ARRAYIDX_2]], [[UPPER]], {{!annotation ![0-9]+}}
-// CHECK-NEXT:    br i1 [[TMP1]], label [[CONT1_2:%.*]], label [[TRAP]], {{!annotation ![0-9]+}}
-// CHECK:       cont1.2:
 // CHECK-NEXT:    store i32 2, ptr [[ARRAYIDX_2]], align 4, {{!tbaa ![0-9]+}}
 // CHECK-NEXT:    [[ARRAYIDX_3:%.*]] = getelementptr i8, ptr [[BP]], i64 16
-// CHECK-NEXT:    [[TMP2:%.*]] = icmp ult ptr [[ARRAYIDX_3]], [[UPPER]], {{!annotation ![0-9]+}}
-// CHECK-NEXT:    br i1 [[TMP2]], label [[CONT1_3:%.*]], label [[TRAP]], {{!annotation ![0-9]+}}
-// CHECK:       cont1.3:
 // CHECK-NEXT:    store i32 3, ptr [[ARRAYIDX_3]], align 4, {{!tbaa ![0-9]+}}
 // CHECK-NEXT:    [[ARRAYIDX_4:%.*]] = getelementptr i8, ptr [[BP]], i64 20
-// CHECK-NEXT:    [[TMP3:%.*]] = icmp ult ptr [[ARRAYIDX_4]], [[UPPER]], {{!annotation ![0-9]+}}
-// CHECK-NEXT:    br i1 [[TMP3]], label [[CONT1_4:%.*]], label [[TRAP]], {{!annotation ![0-9]+}}
-// CHECK:       cont1.4:
 // CHECK-NEXT:    store i32 4, ptr [[ARRAYIDX_4]], align 4, {{!tbaa ![0-9]+}}
 // CHECK-NEXT:    [[ARRAYIDX_5:%.*]] = getelementptr i8, ptr [[BP]], i64 24
-// CHECK-NEXT:    [[TMP4:%.*]] = icmp ult ptr [[ARRAYIDX_5]], [[UPPER]], {{!annotation ![0-9]+}}
-// CHECK-NEXT:    br i1 [[TMP4]], label [[CONT1_5:%.*]], label [[TRAP]], {{!annotation ![0-9]+}}
-// CHECK:       cont1.5:
 // CHECK-NEXT:    store i32 5, ptr [[ARRAYIDX_5]], align 4, {{!tbaa ![0-9]+}}
 // CHECK-NEXT:    [[ARRAYIDX_6:%.*]] = getelementptr i8, ptr [[BP]], i64 28
-// CHECK-NEXT:    [[TMP5:%.*]] = icmp ult ptr [[ARRAYIDX_6]], [[UPPER]], {{!annotation ![0-9]+}}
-// CHECK-NEXT:    br i1 [[TMP5]], label [[CONT1_6:%.*]], label [[TRAP]], {{!annotation ![0-9]+}}
-// CHECK:       cont1.6:
 // CHECK-NEXT:    store i32 6, ptr [[ARRAYIDX_6]], align 4, {{!tbaa ![0-9]+}}
 // CHECK-NEXT:    [[ARRAYIDX_7:%.*]] = getelementptr i8, ptr [[BP]], i64 32
-// CHECK-NEXT:    [[TMP6:%.*]] = icmp ult ptr [[ARRAYIDX_7]], [[UPPER]], {{!annotation ![0-9]+}}
-// CHECK-NEXT:    br i1 [[TMP6]], label [[CONT1_7:%.*]], label [[TRAP]], {{!annotation ![0-9]+}}
-// CHECK:       cont1.7:
 // CHECK-NEXT:    store i32 7, ptr [[ARRAYIDX_7]], align 4, {{!tbaa ![0-9]+}}
 // CHECK-NEXT:    [[ARRAYIDX_8:%.*]] = getelementptr i8, ptr [[BP]], i64 36
-// CHECK-NEXT:    [[TMP7:%.*]] = icmp ult ptr [[ARRAYIDX_8]], [[UPPER]], {{!annotation ![0-9]+}}
-// CHECK-NEXT:    br i1 [[TMP7]], label [[CONT1_8:%.*]], label [[TRAP]], {{!annotation ![0-9]+}}
-// CHECK:       cont1.8:
 // CHECK-NEXT:    store i32 8, ptr [[ARRAYIDX_8]], align 4, {{!tbaa ![0-9]+}}
 // CHECK-NEXT:    [[ARRAYIDX_9:%.*]] = getelementptr i8, ptr [[BP]], i64 40
-// CHECK-NEXT:    [[TMP8:%.*]] = icmp ult ptr [[ARRAYIDX_9]], [[UPPER]], {{!annotation ![0-9]+}}
-// CHECK-NEXT:    br i1 [[TMP8]], label [[CONT1_9:%.*]], label [[TRAP]], {{!annotation ![0-9]+}}
-// CHECK:       cont1.9:
 // CHECK-NEXT:    store i32 9, ptr [[ARRAYIDX_9]], align 4, {{!tbaa ![0-9]+}}
-// CHECK-NEXT:    br label [[TRAP]], {{!annotation ![0-9]+}}
+// CHECK-NEXT:    tail call void @llvm.ubsantrap(i8 25) {{#[0-9]+}}, {{!annotation ![0-9]+}}
+// CHECK-NEXT:    unreachable, {{!annotation ![0-9]+}}
 //
 void array_member_access_trap_on_last_iter(struct buf *bp) {
   for (int i = 0; i < 11; ++i)

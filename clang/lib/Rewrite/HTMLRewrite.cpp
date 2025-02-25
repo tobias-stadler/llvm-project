@@ -334,6 +334,7 @@ h1 { font-size:14pt }
 .keyword { color: blue }
 .string_literal { color: red }
 .directive { color: darkmagenta }
+.anchor { display: block; height: 250px; margin-top: -250px; visibility: hidden; }
 
 /* Macros and variables could have pop-up notes hidden by default.
   - Macro pop-up:    expansion of the macro

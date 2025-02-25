@@ -3433,6 +3433,52 @@ Check for non-determinism caused by sorting of pointers.
 alpha.WebKit
 ^^^^^^^^^^^^
 
+.. _alpha-webkit-NoUncheckedPtrMemberChecker:
+
+alpha.webkit.MemoryUnsafeCastChecker
+""""""""""""""""""""""""""""""""""""""
+Check for all casts from a base type to its derived type as these might be memory-unsafe.
+
+Example:
+
+.. code-block:: cpp
+
+    class Base { };
+    class Derived : public Base { };
+
+    void f(Base* base) {
+        Derived* derived = static_cast<Derived*>(base); // ERROR
+    }
+
+For all cast operations (C-style casts, static_cast, reinterpret_cast, dynamic_cast), if the source type a `Base*` and the destination type is `Derived*`, where `Derived` inherits from `Base`, the static analyzer should signal an error.
+
+This applies to:
+
+- C structs, C++ structs and classes, and Objective-C classes and protocols.
+- Pointers and references.
+- Inside template instantiations and macro expansions that are visible to the compiler.
+
+For types like this, instead of using built in casts, the programmer will use helper functions that internally perform the appropriate type check and disable static analysis.
+
+alpha.webkit.NoUncheckedPtrMemberChecker
+""""""""""""""""""""""""""""""""""""""""
+Raw pointers and references to an object which supports CheckedPtr or CheckedRef can't be used as class members. Only CheckedPtr, CheckedRef, RefPtr, or Ref are allowed.
+
+.. code-block:: cpp
+
+ struct CheckableObj {
+   void incrementCheckedPtrCount() {}
+   void decrementCheckedPtrCount() {}
+ };
+
+ struct Foo {
+   CheckableObj* ptr; // warn
+   CheckableObj& ptr; // warn
+   // ...
+ };
+
+See `WebKit Guidelines for Safer C++ Programming <https://github.com/WebKit/WebKit/wiki/Safer-CPP-Guidelines>`_ for details.
+
 .. _alpha-webkit-UncountedCallArgsChecker:
 
 alpha.webkit.UncountedCallArgsChecker
@@ -3522,6 +3568,12 @@ We also define a set of safe transformations which if passed a safe value as an 
 - casts
 - unary operators like ``&`` or ``*``
 
+alpha.webkit.UncheckedCallArgsChecker
+"""""""""""""""""""""""""""""""""""""
+The goal of this rule is to make sure that lifetime of any dynamically allocated CheckedPtr capable object passed as a call argument keeps its memory region past the end of the call. This applies to call to any function, method, lambda, function pointer or functor. CheckedPtr capable objects aren't supposed to be allocated on stack so we check arguments for parameters of raw pointers and references to unchecked types.
+
+The rules of when to use and not to use CheckedPtr / CheckedRef are same as alpha.webkit.UncountedCallArgsChecker for ref-counted objects.
+
 alpha.webkit.UncountedLocalVarsChecker
 """"""""""""""""""""""""""""""""""""""
 The goal of this rule is to make sure that any uncounted local variable is backed by a ref-counted object with lifetime that is strictly larger than the scope of the uncounted local variable. To be on the safe side we require the scope of an uncounted variable to be embedded in the scope of ref-counted object that backs it.
@@ -3546,7 +3598,7 @@ These are examples of cases that we consider safe:
       RefCountable* uncounted = this; // ok
     }
 
-Here are some examples of situations that we warn about as they *might* be potentially unsafe. The logic is that either we're able to guarantee that an argument is safe or it's considered if not a bug then bug-prone.
+Here are some examples of situations that we warn about as they *might* be potentially unsafe. The logic is that either we're able to guarantee that a local variable is safe or it's considered unsafe.
 
   .. code-block:: cpp
 
@@ -3565,11 +3617,48 @@ Here are some examples of situations that we warn about as they *might* be poten
       RefCountable* uncounted = counted.get(); // warn
     }
 
-We don't warn about these cases - we don't consider them necessarily safe but since they are very common and usually safe we'd introduce a lot of false positives otherwise:
-- variable defined in condition part of an ```if``` statement
-- variable defined in init statement condition of a ```for``` statement
+alpha.webkit.UncheckedLocalVarsChecker
+""""""""""""""""""""""""""""""""""""""
+The goal of this rule is to make sure that any unchecked local variable is backed by a CheckedPtr or CheckedRef with lifetime that is strictly larger than the scope of the unchecked local variable. To be on the safe side we require the scope of an unchecked variable to be embedded in the scope of CheckedPtr/CheckRef object that backs it.
 
-For the time being we also don't warn about uninitialized uncounted local variables.
+These are examples of cases that we consider safe:
+
+  .. code-block:: cpp
+
+    void foo1() {
+      CheckedPtr<RefCountable> counted;
+      // The scope of uncounted is EMBEDDED in the scope of counted.
+      {
+        RefCountable* uncounted = counted.get(); // ok
+      }
+    }
+
+    void foo2(CheckedPtr<RefCountable> counted_param) {
+      RefCountable* uncounted = counted_param.get(); // ok
+    }
+
+    void FooClass::foo_method() {
+      RefCountable* uncounted = this; // ok
+    }
+
+Here are some examples of situations that we warn about as they *might* be potentially unsafe. The logic is that either we're able to guarantee that a local variable is safe or it's considered unsafe.
+
+  .. code-block:: cpp
+
+    void foo1() {
+      RefCountable* uncounted = new RefCountable; // warn
+    }
+
+    RefCountable* global_uncounted;
+    void foo2() {
+      RefCountable* uncounted = global_uncounted; // warn
+    }
+
+    void foo3() {
+      RefPtr<RefCountable> counted;
+      // The scope of uncounted is not EMBEDDED in the scope of counted.
+      RefCountable* uncounted = counted.get(); // warn
+    }
 
 Debug Checkers
 ---------------

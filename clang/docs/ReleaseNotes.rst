@@ -1367,6 +1367,10 @@ AST Matchers
 - Fixed captureVars assertion failure if not capturesVariables. (#GH76425)
 - ``forCallable`` now properly preserves binding on successful match. (#GH89657)
 
+- Ensure ``hasType`` and ``hasDeclaration`` match Objective-C interface declarations.
+
+- Ensure ``pointee`` matches Objective-C pointer types.
+
 clang-format
 ------------
 

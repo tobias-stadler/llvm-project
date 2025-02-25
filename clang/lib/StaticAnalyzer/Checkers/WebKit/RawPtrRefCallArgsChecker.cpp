@@ -1,4 +1,4 @@
-//=======- UncountedCallArgsChecker.cpp --------------------------*- C++ -*-==//
+//=======- RawPtrRefCallArgsChecker.cpp --------------------------*- C++ -*-==//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -18,6 +18,8 @@
 #include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
 #include "clang/StaticAnalyzer/Core/Checker.h"
+#include "llvm/ADT/DenseSet.h"
+#include "llvm/Support/SaveAndRestore.h"
 #include <optional>
 
 using namespace clang;
@@ -25,16 +27,21 @@ using namespace ento;
 
 namespace {
 
-class UncountedCallArgsChecker
+class RawPtrRefCallArgsChecker
     : public Checker<check::ASTDecl<TranslationUnitDecl>> {
-  BugType Bug{this,
-            "Uncounted call argument for a raw pointer/reference parameter",
-            "WebKit coding guidelines"};
+  BugType Bug;
   mutable BugReporter *BR;
 
   TrivialFunctionAnalysis TFA;
+  EnsureFunctionAnalysis EFA;
 
 public:
+  RawPtrRefCallArgsChecker(const char *description)
+      : Bug(this, description, "WebKit coding guidelines") {}
+
+  virtual std::optional<bool> isUnsafeType(QualType) const = 0;
+  virtual std::optional<bool> isUnsafePtr(QualType) const = 0;
+  virtual const char *ptrKind() const = 0;
 
   void checkASTDecl(const TranslationUnitDecl *TUD, AnalysisManager &MGR,
                     BugReporter &BRArg) const {
@@ -44,8 +51,12 @@ public:
     // visit template instantiations or lambda classes. We
     // want to visit those, so we make our own RecursiveASTVisitor.
     struct LocalVisitor : public RecursiveASTVisitor<LocalVisitor> {
-      const UncountedCallArgsChecker *Checker;
-      explicit LocalVisitor(const UncountedCallArgsChecker *Checker)
+      using Base = RecursiveASTVisitor<LocalVisitor>;
+
+      const RawPtrRefCallArgsChecker *Checker;
+      Decl *DeclWithIssue{nullptr};
+
+      explicit LocalVisitor(const RawPtrRefCallArgsChecker *Checker)
           : Checker(Checker) {
         assert(Checker);
       }
@@ -56,12 +67,18 @@ public:
       bool TraverseClassTemplateDecl(ClassTemplateDecl *Decl) {
         if (isRefType(safeGetName(Decl)))
           return true;
-        return RecursiveASTVisitor<LocalVisitor>::TraverseClassTemplateDecl(
-            Decl);
+        return Base::TraverseClassTemplateDecl(Decl);
+      }
+
+      bool TraverseDecl(Decl *D) {
+        llvm::SaveAndRestore SavedDecl(DeclWithIssue);
+        if (D && (isa<FunctionDecl>(D) || isa<ObjCMethodDecl>(D)))
+          DeclWithIssue = D;
+        return Base::TraverseDecl(D);
       }
 
       bool VisitCallExpr(const CallExpr *CE) {
-        Checker->visitCallExpr(CE);
+        Checker->visitCallExpr(CE, DeclWithIssue);
         return true;
       }
     };
@@ -70,27 +87,30 @@ public:
     visitor.TraverseDecl(const_cast<TranslationUnitDecl *>(TUD));
   }
 
-  void visitCallExpr(const CallExpr *CE) const {
+  void visitCallExpr(const CallExpr *CE, const Decl *D) const {
     if (shouldSkipCall(CE))
       return;
 
     if (auto *F = CE->getDirectCallee()) {
       // Skip the first argument for overloaded member operators (e. g. lambda
       // or std::function call operator).
-      unsigned ArgIdx = isa<CXXOperatorCallExpr>(CE) && isa_and_nonnull<CXXMethodDecl>(F);
+      unsigned ArgIdx =
+          isa<CXXOperatorCallExpr>(CE) && isa_and_nonnull<CXXMethodDecl>(F);
 
       if (auto *MemberCallExpr = dyn_cast<CXXMemberCallExpr>(CE)) {
         if (auto *MD = MemberCallExpr->getMethodDecl()) {
           auto name = safeGetName(MD);
           if (name == "ref" || name == "deref")
             return;
+          if (name == "incrementCheckedPtrCount" ||
+              name == "decrementCheckedPtrCount")
+            return;
         }
         auto *E = MemberCallExpr->getImplicitObjectArgument();
-        QualType ArgType = MemberCallExpr->getObjectType();
-        std::optional<bool> IsUncounted =
-            isUncounted(ArgType->getAsCXXRecordDecl());
-        if (IsUncounted && *IsUncounted && !isPtrOriginSafe(E))
-          reportBugOnThis(E);
+        QualType ArgType = MemberCallExpr->getObjectType().getCanonicalType();
+        std::optional<bool> IsUnsafe = isUnsafeType(ArgType);
+        if (IsUnsafe && *IsUnsafe && !isPtrOriginSafe(E))
+          reportBugOnThis(E, D);
       }
 
       for (auto P = F->param_begin();
@@ -103,12 +123,9 @@ public:
         // if ((*P)->hasAttr<SafeRefCntblRawPtrAttr>())
         //  continue;
 
-        const auto *ArgType = (*P)->getType().getTypePtrOrNull();
-        if (!ArgType)
-          continue; // FIXME? Should we bail?
-
+        QualType ArgType = (*P)->getType().getCanonicalType();
         // FIXME: more complex types (arrays, references to raw pointers, etc)
-        std::optional<bool> IsUncounted = isUncountedPtr(ArgType);
+        std::optional<bool> IsUncounted = isUnsafePtr(ArgType);
         if (!IsUncounted || !(*IsUncounted))
           continue;
 
@@ -120,14 +137,14 @@ public:
         if (isPtrOriginSafe(Arg))
           continue;
 
-        reportBug(Arg, *P);
+        reportBug(Arg, *P, D);
       }
     }
   }
 
   bool isPtrOriginSafe(const Expr *Arg) const {
     return tryToFindPtrOrigin(Arg, /*StopAtFirstRefCountedObj=*/true,
-                              [](const clang::Expr *ArgOrigin, bool IsSafe) {
+                              [&](const clang::Expr *ArgOrigin, bool IsSafe) {
                                 if (IsSafe)
                                   return true;
                                 if (isa<CXXNullPtrLiteralExpr>(ArgOrigin)) {
@@ -140,6 +157,8 @@ public:
                                   return true;
                                 }
                                 if (isASafeCallArg(ArgOrigin))
+                                  return true;
+                                if (EFA.isACallToEnsureFn(ArgOrigin))
                                   return true;
                                 return false;
                               });
@@ -241,7 +260,8 @@ public:
             ClsName.ends_with("String"));
   }
 
-  void reportBug(const Expr *CallArg, const ParmVarDecl *Param) const {
+  void reportBug(const Expr *CallArg, const ParmVarDecl *Param,
+                 const Decl *DeclWithIssue) const {
     assert(CallArg);
 
     SmallString<100> Buf;
@@ -253,7 +273,7 @@ public:
       Os << " for parameter ";
       printQuotedQualifiedName(Os, Param);
     }
-    Os << " is uncounted and unsafe.";
+    Os << " is " << ptrKind() << " and unsafe.";
 
     const SourceLocation SrcLocToReport =
         isa<CXXDefaultArgExpr>(CallArg) ? Param->getDefaultArg()->getExprLoc()
@@ -262,22 +282,62 @@ public:
     PathDiagnosticLocation BSLoc(SrcLocToReport, BR->getSourceManager());
     auto Report = std::make_unique<BasicBugReport>(Bug, Os.str(), BSLoc);
     Report->addRange(CallArg->getSourceRange());
+    Report->setDeclWithIssue(DeclWithIssue);
     BR->emitReport(std::move(Report));
   }
 
-  void reportBugOnThis(const Expr *CallArg) const {
+  void reportBugOnThis(const Expr *CallArg, const Decl *DeclWithIssue) const {
     assert(CallArg);
 
     const SourceLocation SrcLocToReport = CallArg->getSourceRange().getBegin();
 
+    SmallString<100> Buf;
+    llvm::raw_svector_ostream Os(Buf);
+    Os << "Call argument for 'this' parameter is " << ptrKind();
+    Os << " and unsafe.";
+
     PathDiagnosticLocation BSLoc(SrcLocToReport, BR->getSourceManager());
-    auto Report = std::make_unique<BasicBugReport>(
-        Bug, "Call argument for 'this' parameter is uncounted and unsafe.",
-        BSLoc);
+    auto Report = std::make_unique<BasicBugReport>(Bug, Os.str(), BSLoc);
     Report->addRange(CallArg->getSourceRange());
+    Report->setDeclWithIssue(DeclWithIssue);
     BR->emitReport(std::move(Report));
   }
 };
+
+class UncountedCallArgsChecker final : public RawPtrRefCallArgsChecker {
+public:
+  UncountedCallArgsChecker()
+      : RawPtrRefCallArgsChecker("Uncounted call argument for a raw "
+                                 "pointer/reference parameter") {}
+
+  std::optional<bool> isUnsafeType(QualType QT) const final {
+    return isUncounted(QT);
+  }
+
+  std::optional<bool> isUnsafePtr(QualType QT) const final {
+    return isUncountedPtr(QT);
+  }
+
+  const char *ptrKind() const final { return "uncounted"; }
+};
+
+class UncheckedCallArgsChecker final : public RawPtrRefCallArgsChecker {
+public:
+  UncheckedCallArgsChecker()
+      : RawPtrRefCallArgsChecker("Unchecked call argument for a raw "
+                                 "pointer/reference parameter") {}
+
+  std::optional<bool> isUnsafeType(QualType QT) const final {
+    return isUnchecked(QT);
+  }
+
+  std::optional<bool> isUnsafePtr(QualType QT) const final {
+    return isUncheckedPtr(QT);
+  }
+
+  const char *ptrKind() const final { return "unchecked"; }
+};
+
 } // namespace
 
 void ento::registerUncountedCallArgsChecker(CheckerManager &Mgr) {
@@ -285,5 +345,13 @@ void ento::registerUncountedCallArgsChecker(CheckerManager &Mgr) {
 }
 
 bool ento::shouldRegisterUncountedCallArgsChecker(const CheckerManager &) {
+  return true;
+}
+
+void ento::registerUncheckedCallArgsChecker(CheckerManager &Mgr) {
+  Mgr.registerChecker<UncheckedCallArgsChecker>();
+}
+
+bool ento::shouldRegisterUncheckedCallArgsChecker(const CheckerManager &) {
   return true;
 }

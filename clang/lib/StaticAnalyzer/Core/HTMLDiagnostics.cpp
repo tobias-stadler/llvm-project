@@ -945,6 +945,10 @@ void HTMLDiagnostics::HandlePiece(Rewriter &R, FileID BugFileID,
   std::string sbuf;
   llvm::raw_string_ostream os(sbuf);
 
+  // This creates a hidden entry so #EndPath is centered on the page when linked
+  if (num == max)
+    os << "\n<tr class=\"anchor\" id=\"EndPath\"></tr>";
+
   os << "\n<tr><td class=\"num\"></td><td class=\"line\"><div id=\"";
 
   if (IsNote)

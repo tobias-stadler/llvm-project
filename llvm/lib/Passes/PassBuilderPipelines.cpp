@@ -733,6 +733,9 @@ PassBuilder::buildFunctionSimplificationPipeline(OptimizationLevel Level,
   FPM.addPass(InstCombinePass());
   invokePeepholeEPCallbacks(FPM, Level);
 
+  if (EnableConstraintElimination)
+    FPM.addPass(ConstraintEliminationPass());
+
   // Re-consider control flow based optimizations after redundancy elimination,
   // redo DCE, etc.
   if (EnableDFAJumpThreading)

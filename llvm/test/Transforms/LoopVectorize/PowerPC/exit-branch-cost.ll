@@ -140,18 +140,18 @@ define i1 @select_exit_cond(ptr %start, ptr %end, i64 %N) {
 ; CHECK-NEXT:    br label %[[VEC_EPILOG_VECTOR_BODY:.*]]
 ; CHECK:       [[VEC_EPILOG_VECTOR_BODY]]:
 ; CHECK-NEXT:    [[INDEX29:%.*]] = phi i64 [ [[VEC_EPILOG_RESUME_VAL]], %[[VEC_EPILOG_PH]] ], [ [[INDEX_NEXT35:%.*]], %[[VEC_EPILOG_VECTOR_BODY]] ]
-; CHECK-NEXT:    [[VEC_IND30:%.*]] = phi <2 x i64> [ [[INDUCTION]], %[[VEC_EPILOG_PH]] ], [ [[VEC_IND_NEXT31:%.*]], %[[VEC_EPILOG_VECTOR_BODY]] ]
+; CHECK-NEXT:    [[VEC_IND44:%.*]] = phi <2 x i64> [ [[INDUCTION]], %[[VEC_EPILOG_PH]] ], [ [[VEC_IND_NEXT46:%.*]], %[[VEC_EPILOG_VECTOR_BODY]] ]
 ; CHECK-NEXT:    [[VEC_PHI32:%.*]] = phi <2 x i64> [ [[TMP55]], %[[VEC_EPILOG_PH]] ], [ [[TMP56:%.*]], %[[VEC_EPILOG_VECTOR_BODY]] ]
 ; CHECK-NEXT:    [[TMP57:%.*]] = add i64 [[INDEX29]], 0
 ; CHECK-NEXT:    [[NEXT_GEP33:%.*]] = getelementptr i8, ptr [[START]], i64 [[TMP57]]
 ; CHECK-NEXT:    [[TMP58:%.*]] = getelementptr i8, ptr [[NEXT_GEP33]], i32 0
 ; CHECK-NEXT:    [[WIDE_LOAD34:%.*]] = load <2 x i8>, ptr [[TMP58]], align 1
 ; CHECK-NEXT:    [[TMP59:%.*]] = zext <2 x i8> [[WIDE_LOAD34]] to <2 x i64>
-; CHECK-NEXT:    [[TMP60:%.*]] = shl <2 x i64> [[VEC_IND30]], splat (i64 1)
+; CHECK-NEXT:    [[TMP60:%.*]] = shl <2 x i64> [[VEC_IND44]], <i64 1, i64 1>
 ; CHECK-NEXT:    [[TMP61:%.*]] = shl <2 x i64> [[TMP59]], [[TMP60]]
 ; CHECK-NEXT:    [[TMP56]] = or <2 x i64> [[TMP61]], [[VEC_PHI32]]
 ; CHECK-NEXT:    [[INDEX_NEXT35]] = add nuw i64 [[INDEX29]], 2
-; CHECK-NEXT:    [[VEC_IND_NEXT31]] = add <2 x i64> [[VEC_IND30]], splat (i64 2)
+; CHECK-NEXT:    [[VEC_IND_NEXT46]] = add <2 x i64> [[VEC_IND44]], <i64 2, i64 2>
 ; CHECK-NEXT:    [[TMP62:%.*]] = icmp eq i64 [[INDEX_NEXT35]], [[N_VEC25]]
 ; CHECK-NEXT:    br i1 [[TMP62]], label %[[VEC_EPILOG_MIDDLE_BLOCK:.*]], label %[[VEC_EPILOG_VECTOR_BODY]], !llvm.loop [[LOOP3:![0-9]+]]
 ; CHECK:       [[VEC_EPILOG_MIDDLE_BLOCK]]:
@@ -159,14 +159,14 @@ define i1 @select_exit_cond(ptr %start, ptr %end, i64 %N) {
 ; CHECK-NEXT:    [[CMP_N36:%.*]] = icmp eq i64 [[TMP2]], [[N_VEC25]]
 ; CHECK-NEXT:    br i1 [[CMP_N36]], label %[[EXIT]], label %[[VEC_EPILOG_SCALAR_PH]]
 ; CHECK:       [[VEC_EPILOG_SCALAR_PH]]:
-; CHECK-NEXT:    [[BC_RESUME_VAL26:%.*]] = phi i64 [ [[N_VEC25]], %[[VEC_EPILOG_MIDDLE_BLOCK]] ], [ [[N_VEC]], %[[VEC_EPILOG_ITER_CHECK]] ], [ 0, %[[ITER_CHECK]] ]
-; CHECK-NEXT:    [[BC_RESUME_VAL28:%.*]] = phi ptr [ [[IND_END]], %[[VEC_EPILOG_MIDDLE_BLOCK]] ], [ [[IND_END27]], %[[VEC_EPILOG_ITER_CHECK]] ], [ [[START]], %[[ITER_CHECK]] ]
-; CHECK-NEXT:    [[BC_MERGE_RDX37:%.*]] = phi i64 [ [[TMP54]], %[[VEC_EPILOG_MIDDLE_BLOCK]] ], [ 0, %[[ITER_CHECK]] ], [ [[TMP52]], %[[VEC_EPILOG_ITER_CHECK]] ]
+; CHECK-NEXT:    [[BC_RESUME_VAL40:%.*]] = phi i64 [ [[N_VEC25]], %[[VEC_EPILOG_MIDDLE_BLOCK]] ], [ [[N_VEC]], %[[VEC_EPILOG_ITER_CHECK]] ], [ 0, %[[ITER_CHECK]] ]
+; CHECK-NEXT:    [[BC_RESUME_VAL42:%.*]] = phi ptr [ [[IND_END]], %[[VEC_EPILOG_MIDDLE_BLOCK]] ], [ [[IND_END27]], %[[VEC_EPILOG_ITER_CHECK]] ], [ [[START]], %[[ITER_CHECK]] ]
+; CHECK-NEXT:    [[BC_MERGE_RDX52:%.*]] = phi i64 [ [[TMP54]], %[[VEC_EPILOG_MIDDLE_BLOCK]] ], [ 0, %[[ITER_CHECK]] ], [ [[TMP52]], %[[VEC_EPILOG_ITER_CHECK]] ]
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[IV:%.*]] = phi i64 [ [[BC_RESUME_VAL26]], %[[VEC_EPILOG_SCALAR_PH]] ], [ [[IV_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[RED:%.*]] = phi i64 [ [[BC_MERGE_RDX37]], %[[VEC_EPILOG_SCALAR_PH]] ], [ [[RED_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[BC_RESUME_VAL28]], %[[VEC_EPILOG_SCALAR_PH]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[IV:%.*]] = phi i64 [ [[BC_RESUME_VAL40]], %[[VEC_EPILOG_SCALAR_PH]] ], [ [[IV_NEXT:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[RED:%.*]] = phi i64 [ [[BC_MERGE_RDX52]], %[[VEC_EPILOG_SCALAR_PH]] ], [ [[RED_NEXT:%.*]], %[[LOOP]] ]
+; CHECK-NEXT:    [[PTR_IV:%.*]] = phi ptr [ [[BC_RESUME_VAL42]], %[[VEC_EPILOG_SCALAR_PH]] ], [ [[PTR_IV_NEXT:%.*]], %[[LOOP]] ]
 ; CHECK-NEXT:    [[TMP53:%.*]] = load i8, ptr [[PTR_IV]], align 1
 ; CHECK-NEXT:    [[CONV3:%.*]] = zext i8 [[TMP53]] to i64
 ; CHECK-NEXT:    [[MUL:%.*]] = shl i64 [[IV]], 1

@@ -73,6 +73,10 @@ enum class ABI {
   /// single continuation function. The continuation function is available as an
   /// intrinsic.
   Async,
+
+  /// The variant of RetconOnce which features a dynamically-sized caller
+  /// allocation.
+  RetconOnceDynamic,
 };
 
 // Holds structural Coroutine Intrinsics for a particular function and other
@@ -128,9 +132,18 @@ struct LLVM_LIBRARY_VISIBILITY Shape {
     Function *ResumePrototype;
     Function *Alloc;
     Function *Dealloc;
+    Value *Allocator;
     BasicBlock *ReturnBlock;
     bool IsFrameInlineInStorage;
     ConstantInt* TypeId;
+    GlobalVariable *CoroFuncPointer;
+    Value *Storage;
+    uint64_t StorageSize;
+    Align StorageAlignment;
+    // computed during splitting:
+    uint64_t ContextSize;
+
+    Align getStorageAlignment() const { return Align(StorageAlignment); }
   };
 
   struct AsyncLoweringStorage {
@@ -196,6 +209,7 @@ struct LLVM_LIBRARY_VISIBILITY Shape {
                                /*IsVarArg=*/false);
     case coro::ABI::Retcon:
     case coro::ABI::RetconOnce:
+    case coro::ABI::RetconOnceDynamic:
       return RetconLowering.ResumePrototype->getFunctionType();
     case coro::ABI::Async:
       // Not used. The function type depends on the active suspend.
@@ -206,8 +220,8 @@ struct LLVM_LIBRARY_VISIBILITY Shape {
   }
 
   ArrayRef<Type*> getRetconResultTypes() const {
-    assert(ABI == coro::ABI::Retcon ||
-           ABI == coro::ABI::RetconOnce);
+    assert(ABI == coro::ABI::Retcon || ABI == coro::ABI::RetconOnce ||
+           ABI == coro::ABI::RetconOnceDynamic);
     auto FTy = CoroBegin->getFunction()->getFunctionType();
 
     // The safety of all this is checked by checkWFRetconPrototype.
@@ -219,8 +233,8 @@ struct LLVM_LIBRARY_VISIBILITY Shape {
   }
 
   ArrayRef<Type*> getRetconResumeTypes() const {
-    assert(ABI == coro::ABI::Retcon ||
-           ABI == coro::ABI::RetconOnce);
+    assert(ABI == coro::ABI::Retcon || ABI == coro::ABI::RetconOnce ||
+           ABI == coro::ABI::RetconOnceDynamic);
 
     // The safety of all this is checked by checkWFRetconPrototype.
     auto FTy = RetconLowering.ResumePrototype->getFunctionType();
@@ -234,6 +248,7 @@ struct LLVM_LIBRARY_VISIBILITY Shape {
 
     case coro::ABI::Retcon:
     case coro::ABI::RetconOnce:
+    case coro::ABI::RetconOnceDynamic:
       return RetconLowering.ResumePrototype->getCallingConv();
     case coro::ABI::Async:
       return AsyncLowering.AsyncCC;
@@ -266,12 +281,15 @@ struct LLVM_LIBRARY_VISIBILITY Shape {
   /// \param CG - if non-null, will be updated for the new call
   void emitDealloc(IRBuilder<> &Builder, Value *Ptr, CallGraph *CG) const;
 
-  Shape() = default;
+  Shape() = delete;
   explicit Shape(Function &F, bool OptimizeFrame = false)
       : OptimizeFrame(OptimizeFrame) {
     buildFrom(F);
   }
   void buildFrom(Function &F);
+
+private:
+  void buildShapeFromRetconInst(AnyCoroIdInst *Id, Function *Prototype);
 };
 
 bool defaultMaterializable(Instruction &V);

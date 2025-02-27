@@ -1394,6 +1394,19 @@ static StructType *buildFrameType(Function &F, coro::Shape &Shape,
          B.getStructAlign() <= Id->getStorageAlignment());
     break;
   }
+  case coro::ABI::RetconOnceDynamic: {
+    // In the dynamic retcon.once ABI, the frame is always inline in the
+    // storage.
+    Shape.RetconLowering.IsFrameInlineInStorage = true;
+    Shape.RetconLowering.ContextSize =
+        alignTo(Shape.FrameSize, Shape.RetconLowering.StorageAlignment);
+    if (Shape.RetconLowering.StorageAlignment < Shape.FrameAlign) {
+      report_fatal_error(
+          "The alignment requirment of frame variables cannot be higher than "
+          "the alignment of the coro function context");
+    }
+    break;
+  }
   case coro::ABI::Async: {
     Shape.AsyncLowering.FrameOffset =
         alignTo(Shape.AsyncLowering.ContextHeaderSize, Shape.FrameAlign);
@@ -1969,7 +1982,8 @@ static void insertSpills(const FrameDataInfo &FrameData, coro::Shape &Shape) {
 
   // retcon and retcon.once lowering assumes all uses have been sunk.
   if (Shape.ABI == coro::ABI::Retcon || Shape.ABI == coro::ABI::RetconOnce ||
-      Shape.ABI == coro::ABI::Async) {
+      Shape.ABI == coro::ABI::Async ||
+      Shape.ABI == coro::ABI::RetconOnceDynamic) {
     // If we found any allocas, replace all of their remaining uses with Geps.
     Builder.SetInsertPoint(SpillBlock, SpillBlock->begin());
     for (const auto &P : FrameData.Allocas) {
@@ -2857,7 +2871,8 @@ static void collectFrameAlloca(AllocaInst *AI, coro::Shape &Shape,
   // code.
   bool ShouldUseLifetimeStartInfo =
       (Shape.ABI != coro::ABI::Async && Shape.ABI != coro::ABI::Retcon &&
-       Shape.ABI != coro::ABI::RetconOnce);
+       Shape.ABI != coro::ABI::RetconOnce &&
+       Shape.ABI != coro::ABI::RetconOnceDynamic);
   AllocaUseVisitor Visitor{AI->getDataLayout(), DT, Shape, Checker,
                            ShouldUseLifetimeStartInfo};
   Visitor.visitPtr(*AI);
@@ -3160,7 +3175,8 @@ void coro::buildCoroutineFrame(
   SmallVector<CoroAllocaAllocInst*, 4> LocalAllocas;
   SmallVector<Instruction*, 4> DeadInstructions;
   if (Shape.ABI != coro::ABI::Async && Shape.ABI != coro::ABI::Retcon &&
-      Shape.ABI != coro::ABI::RetconOnce)
+      Shape.ABI != coro::ABI::RetconOnce &&
+      Shape.ABI != coro::ABI::RetconOnceDynamic)
     sinkLifetimeStartMarkers(F, Shape, Checker, DT);
 
   // Collect the spills for arguments and other not-materializable values.
@@ -3238,7 +3254,8 @@ void coro::buildCoroutineFrame(
 
   LLVM_DEBUG(dumpSpills("Spills", FrameData.Spills));
   if (Shape.ABI == coro::ABI::Retcon || Shape.ABI == coro::ABI::RetconOnce ||
-      Shape.ABI == coro::ABI::Async)
+      Shape.ABI == coro::ABI::Async ||
+      Shape.ABI == coro::ABI::RetconOnceDynamic)
     sinkSpillUsesAfterCoroBegin(F, FrameData, Shape.CoroBegin);
   Shape.FrameTy = buildFrameType(F, Shape, FrameData);
   Shape.FramePtr = Shape.CoroBegin;

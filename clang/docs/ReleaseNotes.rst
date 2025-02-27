@@ -561,6 +561,9 @@ Removed Compiler Flags
 
 Attribute Changes in Clang
 --------------------------
+- Adding [[clang::unsafe_buffer_usage]] attribute to a method definition now turns off all -Wunsafe-buffer-usage
+  related warnings within the method body.
+
 - Introduced a new function attribute ``__attribute__((amdgpu_max_num_work_groups(x, y, z)))`` or
   ``[[clang::amdgpu_max_num_work_groups(x, y, z)]]`` for the AMDGPU target. This attribute can be
   attached to HIP or OpenCL kernel function definitions to provide an optimization hint. The parameters

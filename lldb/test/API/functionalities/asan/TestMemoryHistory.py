@@ -13,6 +13,7 @@ from lldbsuite.test_event.build_exception import BuildError
 class AsanTestCase(TestBase):
     @skipIfFreeBSD  # llvm.org/pr21136 runtimes not yet available by default
     @expectedFailureNetBSD
+    @skipIfDarwin #  rdar://142836595
     @skipUnlessAddressSanitizer
     def test(self):
         self.build(make_targets=["asan"])

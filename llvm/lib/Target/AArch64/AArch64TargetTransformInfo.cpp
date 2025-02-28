@@ -4572,14 +4572,35 @@ AArch64TTIImpl::getScalingFactorCost(Type *Ty, GlobalValue *BaseGV,
 }
 
 bool AArch64TTIImpl::shouldTreatInstructionLikeSelect(const Instruction *I) {
-  // For the binary operators (e.g. or) we need to be more careful than
-  // selects, here we only transform them if they are already at a natural
-  // break point in the code - the end of a block with an unconditional
-  // terminator.
-  if (EnableOrLikeSelectOpt && I->getOpcode() == Instruction::Or &&
-      isa<BranchInst>(I->getNextNode()) &&
-      cast<BranchInst>(I->getNextNode())->isUnconditional())
-    return true;
+  if (EnableOrLikeSelectOpt) {
+    switch (ST->getProcFamily()) {
+    case AArch64Subtarget::AppleA14:
+    case AArch64Subtarget::AppleA15:
+    case AArch64Subtarget::AppleA16:
+    case AArch64Subtarget::AppleM4:
+      // Only treat Adds feeding pointers as select-like.
+      if (I->getOpcode() == Instruction::Add ||
+          I->getOpcode() == Instruction::Sub)
+        return any_of(I->getOperand(0)->users(),
+                      [](User *U) { return isa<GetElementPtrInst>(U); });
+      return false;
+    default:
+      break;
+    }
+
+    // For the binary operators (e.g. or) we need to be more careful than
+    // selects, here we only transform them if they are already at a natural
+    // break point in the code - the end of a block with an unconditional
+    // terminator.
+    if (I->getOpcode() == Instruction::Or &&
+        isa<BranchInst>(I->getNextNode()) &&
+        cast<BranchInst>(I->getNextNode())->isUnconditional())
+      return true;
+
+    if (I->getOpcode() == Instruction::Add ||
+        I->getOpcode() == Instruction::Sub)
+      return true;
+  }
   return BaseT::shouldTreatInstructionLikeSelect(I);
 }
 

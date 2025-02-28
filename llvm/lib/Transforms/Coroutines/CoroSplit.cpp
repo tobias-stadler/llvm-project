@@ -1967,7 +1967,34 @@ static void splitRetconCoroutine(Function &F, coro::Shape &Shape,
           RetV = Builder.CreateInsertValue(RetV, ReturnPHIs[I], I);
       }
 
-      Builder.CreateRet(RetV);
+      if (Shape.ABI == coro::ABI::RetconOnceDynamic &&
+          F.getCallingConv() == CallingConv::SwiftCoro) {
+        //  %retval = ...
+        //  %null_allocator = icmp %1, null
+        //  br i1 %null_allocator, label %popless, label %normal
+        // popless:
+        //  ret %retval
+        // normal:
+        //  %popless_retval = musttail call i64 @llvm.coro.return(%retval)
+        //  ret %popless_retval
+        auto *NullAllocator = Builder.CreateCmp(
+            CmpInst::Predicate::ICMP_EQ, Shape.RetconLowering.Allocator,
+            ConstantPointerNull::get(
+                cast<PointerType>(Shape.RetconLowering.Allocator->getType())));
+        auto *PoplessReturnBB = BasicBlock::Create(
+            F.getContext(), "coro.return.popless", &F, NewSuspendBB);
+        auto *NormalReturnBB = BasicBlock::Create(
+            F.getContext(), "coro.return.normal", &F, NewSuspendBB);
+        Builder.CreateCondBr(NullAllocator, PoplessReturnBB, NormalReturnBB);
+        IRBuilder<> PoplessBuilder(PoplessReturnBB);
+        auto *WrapRetV = PoplessBuilder.CreateIntrinsic(
+            RetV->getType(), Intrinsic::coro_return, {RetV});
+        PoplessBuilder.CreateRet(WrapRetV);
+        IRBuilder<> NormalBuilder(NormalReturnBB);
+        NormalBuilder.CreateRet(RetV);
+      } else {
+        Builder.CreateRet(RetV);
+      }
     }
 
     // Branch to the return block.

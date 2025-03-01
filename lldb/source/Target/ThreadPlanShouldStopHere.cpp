@@ -94,6 +94,7 @@ bool ThreadPlanShouldStopHere::DefaultShouldStopHereCallback(
               frame->GetFunctionName(),
               Language::GetNameForLanguageType(runtime->GetLanguageType()));
           should_stop_here = false;
+        }
       }
     }
   }

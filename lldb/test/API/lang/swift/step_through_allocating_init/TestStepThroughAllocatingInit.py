@@ -61,7 +61,11 @@ class TestStepThroughAllocatingInit(lldbtest.TestBase):
 
         # Step one line so some_string is initialized, make sure we can
         # get its value:
-        thread.StepOver()
+        if use_api:
+            thread.StepOver()
+        else:
+            self.runCmd("thread step-over")
+
         frame_0 = thread.frames[0]
         self.assertIn('Foo.init()', frame_0.GetFunctionName())
         var = frame_0.FindVariable("some_string")
@@ -69,6 +73,10 @@ class TestStepThroughAllocatingInit(lldbtest.TestBase):
         self.assertEqual(var.GetSummary(), '"foo"')
         
         # Now make sure that stepping out steps past the thunk:
-        thread.StepOut()
+        if use_api:
+            thread.StepOut()
+        else:
+            self.runCmd("thread step-out")
+
         frame_0 = thread.frames[0]
         self.assertIn("doSomething", frame_0.GetFunctionName())

@@ -10,7 +10,6 @@
 #include "llvm/CAS/ActionCache.h"
 #include "llvm/CAS/CachingOnDiskFileSystem.h"
 #include "llvm/CAS/ObjectStore.h"
-#include "llvm/Support/TargetSelect.h"
 
 using namespace clang;
 using namespace tooling;
@@ -27,10 +26,4 @@ DependencyScanningService::DependencyScanningService(
       SharedFS(std::move(SharedFS)) {
   if (!this->SharedFS)
     SharedCache.emplace();
-
-  // Initialize targets for object file support.
-  llvm::InitializeAllTargets();
-  llvm::InitializeAllTargetMCs();
-  llvm::InitializeAllAsmPrinters();
-  llvm::InitializeAllAsmParsers();
 }

@@ -60,9 +60,7 @@ public:
   SourceLocation getEndLoc() const { return EndLoc; }
 
   /// Returns true when this represents the '*' case.
-  bool isOtherPlatformSpec() const {
-    return Version.empty() && DomainName.empty();
-  }
+  bool isOtherPlatformSpec() const { return Version.empty(); }
 
   bool isDomainName() const { return !DomainName.empty(); }
   StringRef getDomainName() const { return DomainName; }

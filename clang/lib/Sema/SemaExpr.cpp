@@ -369,8 +369,6 @@ bool Sema::DiagnoseUseOfDecl(NamedDecl *D, ArrayRef<SourceLocation> Locs,
   DiagnoseAvailabilityOfDecl(D, Locs, UnknownObjCClass, ObjCPropertyAccess,
                              AvoidPartialAvailabilityChecks, ClassReceiver);
 
-  DiagnoseFeatureAvailabilityOfDecl(D, Locs);
-
   DiagnoseUnusedOfDecl(*this, D, Loc);
 
   diagnoseUseOfInternalDeclInInlineFunction(*this, D, Loc);
@@ -19387,9 +19385,6 @@ ExprResult Sema::ActOnBlockStmtExpr(SourceLocation CaretLoc,
 
   if (Body && getCurFunction()->HasPotentialAvailabilityViolations)
     DiagnoseUnguardedAvailabilityViolations(BD);
-
-  if (Body && getCurFunction()->HasPotentialFeatureAvailabilityViolations)
-    DiagnoseUnguardedFeatureAvailabilityViolations(BD);
 
   // Try to apply the named return value optimization. We have to check again
   // if we can do this, though, because blocks keep return statements around

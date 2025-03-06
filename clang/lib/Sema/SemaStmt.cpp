@@ -601,7 +601,6 @@ Sema::ActOnLabelStmt(SourceLocation IdentLoc, LabelDecl *TheDecl,
       TheDecl->setLocation(IdentLoc);
     }
   }
-
   return LS;
 }
 

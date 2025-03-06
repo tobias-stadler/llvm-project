@@ -56,18 +56,6 @@ DelayedDiagnostic::makeAvailability(AvailabilityResult AR,
   return DD;
 }
 
-DelayedDiagnostic
-DelayedDiagnostic::makeFeatureAvailability(NamedDecl *D,
-                                           ArrayRef<SourceLocation> Locs) {
-  assert(!Locs.empty());
-  DelayedDiagnostic DD;
-  DD.Kind = FeatureAvailability;
-  DD.Triggered = false;
-  DD.Loc = Locs.front();
-  DD.FeatureAvailabilityData.Decl = D;
-  return DD;
-}
-
 void DelayedDiagnostic::Destroy() {
   switch (Kind) {
   case Access:
@@ -79,7 +67,6 @@ void DelayedDiagnostic::Destroy() {
     delete[] AvailabilityData.SelectorLocs;
     break;
 
-  case FeatureAvailability:
   case ForbiddenType:
     break;
   }

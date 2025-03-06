@@ -36,7 +36,6 @@ set(core_files
   tgmath.h
   unwind.h
   varargs.h
-  feature-availability.h
   )
 
 set(arm_common_files

@@ -5154,8 +5154,6 @@ ExprResult SemaObjC::ActOnObjCAvailabilityCheckExpr(
   ASTContext &Context = getASTContext();
 
   if (AvailSpecs.front().isDomainName()) {
-    if (FunctionScopeInfo *Info = SemaRef.getCurFunctionAvailabilityContext())
-      Info->HasPotentialFeatureAvailabilityViolations = true;
     auto Spec = AvailSpecs.front();
     return ObjCAvailabilityCheckExpr::CreateAvailabilityFeatureCheck(
         AtLoc, RParen, Context.BoolTy, Spec.getDomainName(), Context);

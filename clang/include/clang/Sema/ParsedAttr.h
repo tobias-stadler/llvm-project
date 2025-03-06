@@ -363,8 +363,6 @@ public:
     return IsProperty;
   }
 
-  bool isAvailabilityAttribute() const { return IsAvailability; }
-
   bool isInvalid() const { return Invalid; }
   void setInvalid(bool b = true) const { Invalid = b; }
 

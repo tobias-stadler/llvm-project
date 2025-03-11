@@ -132,11 +132,8 @@ lldb_private::formatters::LibcxxStdVectorSyntheticFrontEnd::Update() {
     return lldb::ChildCacheState::eRefetch;
 
   m_element_type = data_type_finder_sp->GetCompilerType().GetPointeeType();
-  llvm::Expected<uint64_t> size_or_err = m_element_type.GetByteSize(nullptr);
-  if (!size_or_err)
-    LLDB_LOG_ERRORV(GetLog(LLDBLog::Types), size_or_err.takeError(), "{0}");
-  else {
-    m_element_size = *size_or_err;
+  if (std::optional<uint64_t> size = m_element_type.GetByteSize(nullptr)) {
+    m_element_size = *size;
 
     if (m_element_size > 0) {
       // store raw pointers or end up with a circular dependency
@@ -201,8 +198,7 @@ lldb_private::formatters::LibcxxVectorBoolSyntheticFrontEnd::GetChildAtIndex(
     return {};
   mask = 1 << bit_index;
   bool bit_set = ((byte & mask) != 0);
-  std::optional<uint64_t> size =
-      llvm::expectedToOptional(m_bool_type.GetByteSize(nullptr));
+  std::optional<uint64_t> size = m_bool_type.GetByteSize(nullptr);
   if (!size)
     return {};
   WritableDataBufferSP buffer_sp(new DataBufferHeap(*size, 0));

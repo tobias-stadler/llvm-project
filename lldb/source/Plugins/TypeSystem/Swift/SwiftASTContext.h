@@ -705,7 +705,7 @@ public:
 
   // Exploring the type
 
-  llvm::Expected<uint64_t>
+  std::optional<uint64_t>
   GetBitSize(lldb::opaque_compiler_type_t type,
              ExecutionContextScope *exe_scope) override;
 

@@ -460,7 +460,7 @@ public:
 
   ConstString GetBaseName();
 
-  llvm::Expected<uint64_t> GetByteSize(ExecutionContextScope *exe_scope);
+  std::optional<uint64_t> GetByteSize(ExecutionContextScope *exe_scope);
 
   llvm::Expected<uint32_t> GetNumChildren(bool omit_empty_base_classes);
 

@@ -104,11 +104,8 @@ lldb_private::formatters::LibcxxStdSpanSyntheticFrontEnd::Update() {
   m_element_type = data_type_finder_sp->GetCompilerType().GetPointeeType();
 
   // Get element size.
-  llvm::Expected<uint64_t> size_or_err = m_element_type.GetByteSize(nullptr);
-  if (!size_or_err)
-    LLDB_LOG_ERRORV(GetLog(LLDBLog::Types), size_or_err.takeError(), "{0}");
-  else {
-    m_element_size = *size_or_err;
+  if (std::optional<uint64_t> size = m_element_type.GetByteSize(nullptr)) {
+    m_element_size = *size;
 
     // Get data.
     if (m_element_size > 0) {

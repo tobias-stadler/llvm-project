@@ -158,13 +158,7 @@ public:
     ret->ValueUpdated();
 
     if (variable) {
-      auto pvar_byte_size_or_err = ret->GetByteSize();
-      if (!pvar_byte_size_or_err) {
-        err = Status::FromError(pvar_byte_size_or_err.takeError());
-        return;
-      }
-
-      const uint64_t pvar_byte_size = *pvar_byte_size_or_err;
+      const size_t pvar_byte_size = ret->GetByteSize().value_or(0);
       uint8_t *pvar_data = ret->GetValueBytes();
 
       Status read_error;
@@ -232,13 +226,9 @@ public:
       demangle_ctx.clear();
     }
 
-    auto size_or_err =
+    std::optional<uint64_t> size =
         m_type.GetByteSize(execution_unit->GetBestExecutionContextScope());
-    if (!size_or_err) {
-      err = Status::FromError(size_or_err.takeError());
-      return;
-    }
-    if (*size_or_err == 0) {
+    if (size && *size == 0) {
       MakeREPLResult(*execution_unit, err, nullptr);
       return;
     }
@@ -423,15 +413,10 @@ public:
               FixupResilientGlobal(var_addr, compiler_type, *execution_unit,
                                    exe_scope->CalculateProcess(), read_error);
 
-        auto size_or_err = m_persistent_variable_sp->GetByteSize();
-        if (!size_or_err) {
-          err = Status::FromError(size_or_err.takeError());
-          return;
-        }
-
         // FIXME: This may not work if the value is not bitwise-takable.
-        execution_unit->ReadMemory(m_persistent_variable_sp->GetValueBytes(),
-                                   var_addr, *size_or_err, read_error);
+        execution_unit->ReadMemory(
+            m_persistent_variable_sp->GetValueBytes(), var_addr,
+            m_persistent_variable_sp->GetByteSize().value_or(0), read_error);
 
         if (!read_error.Success()) {
           err = Status::FromErrorStringWithFormatv(
@@ -492,13 +477,12 @@ public:
       if (!err.Success()) {
         dump_stream.Printf("  <could not be read>\n");
       } else {
-        uint64_t size =
-            llvm::expectedToOptional(m_persistent_variable_sp->GetByteSize())
-                .value_or(0);
+        DataBufferHeap data(m_persistent_variable_sp->GetByteSize().value_or(0),
+                            0);
 
-        DataBufferHeap data(size, 0);
-
-        map.ReadMemory(data.GetBytes(), target_address, size, err);
+        map.ReadMemory(data.GetBytes(), target_address,
+                       m_persistent_variable_sp->GetByteSize().value_or(0),
+                       err);
 
         if (!err.Success()) {
           dump_stream.Printf("  <could not be read>\n");

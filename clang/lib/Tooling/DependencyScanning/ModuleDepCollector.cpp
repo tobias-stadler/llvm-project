@@ -877,6 +877,7 @@ ModuleDepCollectorPP::handleTopLevelModule(const Module *M) {
       MD.ModuleCacheKey = Key->toString();
   }
 
+  MD.IgnoreCWD = IgnoreCWD;
   MDC.associateWithContextHash(CI, IgnoreCWD, MD);
 
   // Finish the compiler invocation. Requires dependencies and the context hash.

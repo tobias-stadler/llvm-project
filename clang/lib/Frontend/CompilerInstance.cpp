@@ -1557,7 +1557,7 @@ static bool readASTAfterCompileModule(CompilerInstance &ImportingInstance,
                                       SourceLocation ImportLoc,
                                       SourceLocation ModuleNameLoc,
                                       Module *Module, StringRef ModuleFileName,
-                                      bool *OutOfDate) {
+                                      bool *OutOfDate, bool *Missing) {
   DiagnosticsEngine &Diags = ImportingInstance.getDiagnostics();
 
   unsigned ModuleLoadCapabilities = ASTReader::ARR_Missing;
@@ -1575,6 +1575,12 @@ static bool readASTAfterCompileModule(CompilerInstance &ImportingInstance,
   // The caller wants to handle out-of-date failures.
   if (OutOfDate && ReadResult == ASTReader::OutOfDate) {
     *OutOfDate = true;
+    return false;
+  }
+
+  // The caller wants to handle missing module files.
+  if (Missing && ReadResult == ASTReader::Missing) {
+    *Missing = true;
     return false;
   }
 
@@ -1603,7 +1609,7 @@ static bool compileModuleAndReadASTImpl(CompilerInstance &ImportingInstance,
 
   return readASTAfterCompileModule(ImportingInstance, ImportLoc, ModuleNameLoc,
                                    Module, ModuleFileName,
-                                   /*OutOfDate=*/nullptr);
+                                   /*OutOfDate=*/nullptr, /*Missing=*/nullptr);
 }
 
 /// Compile a module in a separate compiler instance and read the AST,
@@ -1668,15 +1674,17 @@ static bool compileModuleAndReadASTBehindLock(
 
     // Read the module that was just written by someone else.
     bool OutOfDate = false;
+    bool Missing = false;
     if (readASTAfterCompileModule(ImportingInstance, ImportLoc, ModuleNameLoc,
-                                  Module, ModuleFileName, &OutOfDate))
+                                  Module, ModuleFileName, &OutOfDate, &Missing))
       return true;
-    if (!OutOfDate)
+    if (!OutOfDate && !Missing)
       return false;
 
-    // The module may be out of date in the presence of file system races,
-    // or if one of its imports depends on header search paths that are not
-    // consistent with this ImportingInstance.  Try again...
+    // The module may be missing or out of date in the presence of file system
+    // races. It may also be out of date if one of its imports depends on header
+    // search paths that are not consistent with this ImportingInstance.
+    // Try again...
   }
 }
 

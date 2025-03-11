@@ -285,9 +285,7 @@ bool lldb_private::formatters::FormatBoundsSafetyPointer(
   uint64_t pointee_byte_size = 0;
   if (compiler_type.IsPointerType(&pointee_type)) {
     pointee_byte_size =
-        llvm::expectedToOptional(
-            pointee_type.GetByteSize(valobj.GetTargetSP().get()))
-            .value_or(0);
+        pointee_type.GetByteSize(valobj.GetTargetSP().get()).value_or(0);
   }
 
   if (auto maybe_oob_info = GetOOBInfo(ptr, /*upper_bound=*/upper_bound,

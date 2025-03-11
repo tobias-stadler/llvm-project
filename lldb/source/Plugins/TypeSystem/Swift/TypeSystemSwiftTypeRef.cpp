@@ -3528,11 +3528,11 @@ CompilerType TypeSystemSwiftTypeRef::GetVoidFunctionType() {
 }
 
 // Exploring the type
-llvm::Expected<uint64_t>
+std::optional<uint64_t>
 TypeSystemSwiftTypeRef::GetBitSize(opaque_compiler_type_t type,
                                    ExecutionContextScope *exe_scope) {
   LLDB_SCOPED_TIMER();
-  auto impl = [&]() -> llvm::Expected<uint64_t> {
+  auto impl = [&]() -> std::optional<uint64_t> {
     auto get_static_size = [&](bool cached_only) -> std::optional<uint64_t> {
       if (IsMeaninglessWithoutDynamicResolution(type))
         return {};
@@ -3573,25 +3573,21 @@ TypeSystemSwiftTypeRef::GetBitSize(opaque_compiler_type_t type,
       // pointer instead of the underlying object.
       if (Flags(clang_type.GetTypeInfo()).AllSet(eTypeIsObjC | eTypeIsClass))
         return GetPointerByteSize() * 8;
-      auto clang_size = clang_type.GetBitSize(exe_scope);
-      return clang_size;
+      if (auto clang_size = clang_type.GetBitSize(exe_scope))
+        return clang_size;
     }
-    if (!exe_scope)
-      return llvm::createStringError(
-          "Cannot compute size of type %s without an execution context.",
-          AsMangledName(type));
+    if (!exe_scope) {
+      LLDB_LOGF(GetLog(LLDBLog::Types),
+                "Couldn't compute size of type %s without an execution "
+                "context.",
+                AsMangledName(type));
+      return {};
+    }
     // The hot code path is to ask the Swift runtime for the size.
     if (auto *runtime =
             SwiftLanguageRuntime::Get(exe_scope->CalculateProcess())) {
-      auto result_or_err =
-          runtime->GetBitSize({weak_from_this(), type}, exe_scope);
-      if (result_or_err)
-        return *result_or_err;
-      LLDB_LOG_ERROR(
-          GetLog(LLDBLog::Types), result_or_err.takeError(),
-          "Couldn't compute size of type {1} using Swift language runtime: {0}",
-          AsMangledName(type));
-
+      if (auto result = runtime->GetBitSize({weak_from_this(), type}, exe_scope))
+        return result;
       // Runtime failed, fallback to SwiftASTContext.
       if (UseSwiftASTContextFallback(__FUNCTION__, type)) {
         if (auto swift_ast_context =
@@ -3613,20 +3609,21 @@ TypeSystemSwiftTypeRef::GetBitSize(opaque_compiler_type_t type,
     // If we have already parsed this as an lldb::Type from DWARF,
     // return its static size.
     if (auto cached_type_static_size = get_static_size(true))
-      return *cached_type_static_size;
+      return cached_type_static_size;
 
     // If we are here, we probably are in a target with no process and
     // inspect a gloabl variable.  Do an (expensive) search for the
     // static type in the debug info.
     if (auto static_size = get_static_size(false))
-      return *static_size;
-    return llvm::createStringError(
-        "Cannot compute size of type %s using static debug info.",
-        AsMangledName(type));
+      return static_size;
+    LLDB_LOGF(GetLog(LLDBLog::Types),
+              "Couldn't compute size of type %s using static debug info.",
+              AsMangledName(type));
+    return {};
   };
   if (exe_scope && exe_scope->CalculateProcess()) {
-    VALIDATE_AND_RETURN_EXPECTED(impl, GetBitSize, type, exe_scope,
-                                 (ReconstructType(type, exe_scope), exe_scope));
+    VALIDATE_AND_RETURN(impl, GetBitSize, type, exe_scope,
+                        (ReconstructType(type, exe_scope), exe_scope));
   } else
     return impl();
 }
@@ -3922,7 +3919,8 @@ TypeSystemSwiftTypeRef::GetChildCompilerTypeAtIndex(
           child_byte_size, child_byte_offset, child_bitfield_bit_size,
           child_bitfield_bit_offset, child_is_base_class,
           child_is_deref_of_parent, valobj, language_flags);
-    return llvm::createStringError("no SwiftASTContext");
+    return llvm::createStringError(llvm::inconvertibleErrorCode(),
+                                   "no SwiftASTContext");
   };
   std::optional<unsigned> ast_num_children;
   auto get_ast_num_children = [&]() {
@@ -3975,9 +3973,7 @@ TypeSystemSwiftTypeRef::GetChildCompilerTypeAtIndex(
               child_name = "rawValue";
               auto bit_size = raw_value.GetBitSize(
                   exe_ctx ? exe_ctx->GetBestExecutionContextScope() : nullptr);
-              if (!bit_size)
-                return bit_size.takeError();
-              child_byte_size = *bit_size / 8;
+              child_byte_size = bit_size.value_or(0) / 8;
               child_byte_offset = 0;
               child_bitfield_bit_size = 0;
               child_bitfield_bit_offset = 0;

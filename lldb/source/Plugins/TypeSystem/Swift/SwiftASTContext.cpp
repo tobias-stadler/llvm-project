@@ -6096,7 +6096,7 @@ SwiftASTContext::GetTypeInfo(opaque_compiler_type_t type,
   case swift::TypeKind::Integer:
   case swift::TypeKind::Locatable:
   case swift::TypeKind::Module:
-  case swift::TypeKind::OpenedArchetype:
+  case swift::TypeKind::ExistentialArchetype:
   case swift::TypeKind::ParameterizedProtocol:
   case swift::TypeKind::Placeholder:
   case swift::TypeKind::PrimaryArchetype:
@@ -6311,7 +6311,7 @@ lldb::TypeClass SwiftASTContext::GetTypeClass(opaque_compiler_type_t type) {
   case swift::TypeKind::PrimaryArchetype:
   case swift::TypeKind::ElementArchetype:
   case swift::TypeKind::OpaqueTypeArchetype:
-  case swift::TypeKind::OpenedArchetype:
+  case swift::TypeKind::ExistentialArchetype:
   case swift::TypeKind::UnboundGeneric:
   case swift::TypeKind::TypeVariable:
   case swift::TypeKind::ErrorUnion:
@@ -6782,7 +6782,7 @@ lldb::Encoding SwiftASTContext::GetEncoding(opaque_compiler_type_t type,
     return lldb::eEncodingIEEE754; // TODO: detect if an integer is unsigned
 
   case swift::TypeKind::PrimaryArchetype:
-  case swift::TypeKind::OpenedArchetype:
+  case swift::TypeKind::ExistentialArchetype:
   case swift::TypeKind::ElementArchetype:
   case swift::TypeKind::OpaqueTypeArchetype:
   case swift::TypeKind::BuiltinRawPointer:
@@ -6885,7 +6885,7 @@ SwiftASTContext::GetNumChildren(opaque_compiler_type_t type,
   case swift::TypeKind::Metatype:
   case swift::TypeKind::Module:
   case swift::TypeKind::OpaqueTypeArchetype:
-  case swift::TypeKind::OpenedArchetype:
+  case swift::TypeKind::ExistentialArchetype:
   case swift::TypeKind::Pack:
   case swift::TypeKind::PackArchetype:
   case swift::TypeKind::PackElement:
@@ -7089,7 +7089,7 @@ uint32_t SwiftASTContext::GetNumFields(opaque_compiler_type_t type,
 
   case swift::TypeKind::ElementArchetype:
   case swift::TypeKind::OpaqueTypeArchetype:
-  case swift::TypeKind::OpenedArchetype:
+  case swift::TypeKind::ExistentialArchetype:
   case swift::TypeKind::PrimaryArchetype:
   case swift::TypeKind::Function:
   case swift::TypeKind::GenericFunction:
@@ -7397,7 +7397,7 @@ CompilerType SwiftASTContext::GetFieldAtIndex(opaque_compiler_type_t type,
 
   case swift::TypeKind::ElementArchetype:
   case swift::TypeKind::OpaqueTypeArchetype:
-  case swift::TypeKind::OpenedArchetype:
+  case swift::TypeKind::ExistentialArchetype:
   case swift::TypeKind::PrimaryArchetype:
   case swift::TypeKind::Function:
   case swift::TypeKind::GenericFunction:
@@ -7460,7 +7460,7 @@ uint32_t SwiftASTContext::GetNumPointeeChildren(opaque_compiler_type_t type) {
   case swift::TypeKind::Metatype:
   case swift::TypeKind::Module:
   case swift::TypeKind::OpaqueTypeArchetype:
-  case swift::TypeKind::OpenedArchetype:
+  case swift::TypeKind::ExistentialArchetype:
   case swift::TypeKind::Pack:
   case swift::TypeKind::PackArchetype:
   case swift::TypeKind::PackElement:
@@ -7621,7 +7621,7 @@ llvm::Expected<CompilerType> SwiftASTContext::GetChildCompilerTypeAtIndex(
   case swift::TypeKind::Metatype:
   case swift::TypeKind::Module:
   case swift::TypeKind::OpaqueTypeArchetype:
-  case swift::TypeKind::OpenedArchetype:
+  case swift::TypeKind::ExistentialArchetype:
   case swift::TypeKind::Pack:
   case swift::TypeKind::PackArchetype:
   case swift::TypeKind::PackElement:
@@ -7972,7 +7972,7 @@ size_t SwiftASTContext::GetIndexOfChildMemberWithName(
     case swift::TypeKind::Metatype:
     case swift::TypeKind::Module:
     case swift::TypeKind::OpaqueTypeArchetype:
-    case swift::TypeKind::OpenedArchetype:
+    case swift::TypeKind::ExistentialArchetype:
     case swift::TypeKind::Pack:
     case swift::TypeKind::PackArchetype:
     case swift::TypeKind::PackElement:
@@ -8400,7 +8400,7 @@ bool SwiftASTContext::DumpTypeValue(
   case swift::TypeKind::BuiltinBridgeObject:
   case swift::TypeKind::ElementArchetype:
   case swift::TypeKind::OpaqueTypeArchetype:
-  case swift::TypeKind::OpenedArchetype:
+  case swift::TypeKind::ExistentialArchetype:
   case swift::TypeKind::PrimaryArchetype:
   case swift::TypeKind::Function:
   case swift::TypeKind::GenericFunction:

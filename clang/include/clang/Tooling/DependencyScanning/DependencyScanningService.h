@@ -131,7 +131,7 @@ public:
 
   bool useCASFS() const { return (bool)SharedFS; }
 
-  ModuleCacheMutexes &getModuleCacheMutexes() { return ModuleCacheMutexes; }
+  ModuleCacheMutexes &getModuleCacheMutexes() { return ModCacheMutexes; }
 
 private:
   const ScanningMode Mode;
@@ -151,7 +151,7 @@ private:
   /// The global file system cache.
   std::optional<DependencyScanningFilesystemSharedCache> SharedCache;
   /// The global module cache mutexes.
-  ModuleCacheMutexes ModuleCacheMutexes;
+  ModuleCacheMutexes ModCacheMutexes;
 };
 
 } // end namespace dependencies

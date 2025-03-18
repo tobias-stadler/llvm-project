@@ -118,20 +118,30 @@ lldb_private::formatters::LibcxxStdVectorSyntheticFrontEnd::GetChildAtIndex(
                                       m_element_type);
 }
 
+static ValueObjectSP GetDataPointer(ValueObject &root) {
+  if (auto cap_sp = root.GetChildMemberWithName("__cap_"))
+    return cap_sp;
+
+  ValueObjectSP cap_sp = root.GetChildMemberWithName("__end_cap_");
+  if (!cap_sp)
+    return nullptr;
+
+  if (!isOldCompressedPairLayout(*cap_sp))
+    return nullptr;
+
+  return GetFirstValueOfLibCXXCompressedPair(*cap_sp);
+}
+
 lldb::ChildCacheState
 lldb_private::formatters::LibcxxStdVectorSyntheticFrontEnd::Update() {
   m_start = m_finish = nullptr;
-  ValueObjectSP data_type_finder_sp(
-      m_backend.GetChildMemberWithName("__end_cap_"));
-  if (!data_type_finder_sp)
+  ValueObjectSP data_sp(GetDataPointer(m_backend));
+
+  if (!data_sp)
     return lldb::ChildCacheState::eRefetch;
 
-  data_type_finder_sp =
-      GetFirstValueOfLibCXXCompressedPair(*data_type_finder_sp);
-  if (!data_type_finder_sp)
-    return lldb::ChildCacheState::eRefetch;
+  m_element_type = data_sp->GetCompilerType().GetPointeeType();
 
-  m_element_type = data_type_finder_sp->GetCompilerType().GetPointeeType();
   llvm::Expected<uint64_t> size_or_err = m_element_type.GetByteSize(nullptr);
   if (!size_or_err)
     LLDB_LOG_ERRORV(GetLog(LLDBLog::Types), size_or_err.takeError(), "{0}");
@@ -221,17 +231,6 @@ lldb_private::formatters::LibcxxVectorBoolSyntheticFrontEnd::GetChildAtIndex(
     m_children[idx] = retval_sp;
   return retval_sp;
 }
-
-/*(std::__1::vector<std::__1::allocator<bool> >) vBool = {
- __begin_ = 0x00000001001000e0
- __size_ = 56
- __cap_alloc_ = {
- std::__1::__libcpp_compressed_pair_imp<unsigned long,
- std::__1::allocator<unsigned long> > = {
- __first_ = 1
- }
- }
- }*/
 
 lldb::ChildCacheState
 lldb_private::formatters::LibcxxVectorBoolSyntheticFrontEnd::Update() {

@@ -40,6 +40,7 @@
 #include "lldb/Utility/LLDBAssert.h"
 #include "lldb/Utility/Log.h"
 #include "lldb/Utility/StreamString.h"
+#include "lldb/lldb-enumerations.h"
 
 #include "clang/AST/CXXInheritance.h"
 #include "clang/AST/Decl.h"
@@ -2204,6 +2205,22 @@ bool DWARFASTParserClang::CompleteRecordType(const DWARFDIE &die,
   if (attrs.is_forward_declaration)
     return true;
 
+  const bool type_is_objc_object_or_interface =
+      TypeSystemClang::IsObjCObjectOrInterfaceType(clang_type);
+  if (!type_is_objc_object_or_interface &&
+      Language::LanguageIsObjC(
+          static_cast<LanguageType>(die.GetAttributeValueAsUnsigned(
+              DW_AT_APPLE_runtime_class, eLanguageTypeUnknown)))) {
+    // The forward declaration was C++ but the definition is Objective-C.
+    // We currently don't handle such situations. Keep the forward declaration
+    // without a definition.
+    LLDB_LOG(GetLog(LLDBLog::Expressions),
+             "WARNING: Type completion aborted because forward declaration for "
+             "'{0}' is C++ while definition is Objective-C.",
+             attrs.name.AsCString(""));
+    return false;
+  }
+
   clang::DeclContext *decl_ctx = GetClangDeclContextContainingDIE(die, nullptr);
 
   // Start the definition if the type is not being defined already. This can
@@ -2230,9 +2247,6 @@ bool DWARFASTParserClang::CompleteRecordType(const DWARFDIE &die,
                     contained_type_dies, delayed_properties,
                     default_accessibility, layout_info);
 
-  // Now parse any methods if there were any...
-  const bool type_is_objc_object_or_interface =
-      TypeSystemClang::IsObjCObjectOrInterfaceType(clang_type);
   // Now parse any methods if there were any...
   for (const DWARFDIE &mem : member_function_dies)
     dwarf->ResolveType(mem);

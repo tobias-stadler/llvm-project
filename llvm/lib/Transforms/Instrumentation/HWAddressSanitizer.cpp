@@ -594,6 +594,11 @@ void HWAddressSanitizer::initializeModule() {
   LLVM_DEBUG(dbgs() << "Init " << M.getName() << "\n");
   TargetTriple = Triple(M.getTargetTriple());
 
+  // HWASan may do short granule checks on function arguments read from the
+  // argument memory (last byte of the granule), which invalidates writeonly.
+  for (Function &F : M.functions())
+    removeASanIncompatibleFnAttributes(F, /*ReadsArgMem=*/true);
+
   // x86_64 currently has two modes:
   // - Intel LAM (default)
   // - pointer aliasing (heap only)

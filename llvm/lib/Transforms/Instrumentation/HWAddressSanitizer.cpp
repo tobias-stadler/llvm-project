@@ -57,6 +57,7 @@
 #include "llvm/Support/RandomNumberGenerator.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/TargetParser/Triple.h"
+#include "llvm/Transforms/Instrumentation.h"
 #include "llvm/Transforms/Instrumentation/AddressSanitizerCommon.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Local.h"
@@ -455,6 +456,9 @@ private:
 
 PreservedAnalyses HWAddressSanitizerPass::run(Module &M,
                                               ModuleAnalysisManager &MAM) {
+  // Return early if nosanitize_hwaddress module flag is present for the module.
+  if (checkIfAlreadyInstrumented(M, "nosanitize_hwaddress"))
+    return PreservedAnalyses::all();
   const StackSafetyGlobalInfo *SSI = nullptr;
   auto TargetTriple = llvm::Triple(M.getTargetTriple());
   if (shouldUseStackSafetyAnalysis(TargetTriple, Options.DisableOptimization))
@@ -593,6 +597,11 @@ void HWAddressSanitizer::createHwasanCtorComdat() {
 void HWAddressSanitizer::initializeModule() {
   LLVM_DEBUG(dbgs() << "Init " << M.getName() << "\n");
   TargetTriple = Triple(M.getTargetTriple());
+
+  // HWASan may do short granule checks on function arguments read from the
+  // argument memory (last byte of the granule), which invalidates writeonly.
+  for (Function &F : M.functions())
+    removeASanIncompatibleFnAttributes(F, /*ReadsArgMem=*/true);
 
   // x86_64 currently has two modes:
   // - Intel LAM (default)
@@ -1612,14 +1621,6 @@ void HWAddressSanitizer::sanitizeFunction(Function &F,
     return;
 
   assert(!ShadowBase);
-
-  // Remove memory attributes that are about to become invalid.
-  // HWASan checks read from shadow, which invalidates memory(argmem: *)
-  // Short granule checks on function arguments read from the argument memory
-  // (last byte of the granule), which invalidates writeonly.
-  F.removeFnAttr(llvm::Attribute::Memory);
-  for (auto &A : F.args())
-    A.removeAttr(llvm::Attribute::WriteOnly);
 
   BasicBlock::iterator InsertPt = F.getEntryBlock().begin();
   IRBuilder<> EntryIRB(&F.getEntryBlock(), InsertPt);

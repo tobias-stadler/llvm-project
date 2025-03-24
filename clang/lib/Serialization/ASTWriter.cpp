@@ -72,6 +72,7 @@
 #include "clang/Serialization/ASTReader.h"
 #include "clang/Serialization/ASTRecordWriter.h"
 #include "clang/Serialization/InMemoryModuleCache.h"
+#include "clang/Serialization/ModuleCache.h"
 #include "clang/Serialization/ModuleFile.h"
 #include "clang/Serialization/ModuleFileExtension.h"
 #include "clang/Serialization/SerializationDiagnostic.h"
@@ -4865,12 +4866,11 @@ void ASTWriter::SetSelectorOffset(Selector Sel, uint32_t Offset) {
 }
 
 ASTWriter::ASTWriter(llvm::BitstreamWriter &Stream,
-                     SmallVectorImpl<char> &Buffer,
-                     InMemoryModuleCache &ModuleCache,
+                     SmallVectorImpl<char> &Buffer, ModuleCache &ModCache,
                      ArrayRef<std::shared_ptr<ModuleFileExtension>> Extensions,
                      bool IncludeTimestamps, bool BuildingImplicitModule,
                      bool GeneratingReducedBMI)
-    : Stream(Stream), Buffer(Buffer), ModuleCache(ModuleCache),
+    : Stream(Stream), Buffer(Buffer), ModCache(ModCache),
       IncludeTimestamps(IncludeTimestamps),
       BuildingImplicitModule(BuildingImplicitModule),
       GeneratingReducedBMI(GeneratingReducedBMI) {
@@ -4928,9 +4928,9 @@ ASTWriter::WriteAST(llvm::PointerUnion<Sema *, Preprocessor *> Subject,
 
   if (ShouldCacheASTInMemory) {
     // Construct MemoryBuffer and update buffer manager.
-    ModuleCache.addBuiltPCM(OutputFile,
-                            llvm::MemoryBuffer::getMemBufferCopy(
-                                StringRef(Buffer.begin(), Buffer.size())));
+    ModCache.getInMemoryModuleCache().addBuiltPCM(
+        OutputFile, llvm::MemoryBuffer::getMemBufferCopy(
+                        StringRef(Buffer.begin(), Buffer.size())));
   }
   return Signature;
 }

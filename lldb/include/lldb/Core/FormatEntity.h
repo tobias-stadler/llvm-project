@@ -99,7 +99,9 @@ struct Entry {
     LineEntryColumn,
     LineEntryStartAddress,
     LineEntryEndAddress,
-    CurrentPCArrow
+    CurrentPCArrow,
+    ProgressCount,
+    ProgressMessage,
   };
 
   struct Definition {

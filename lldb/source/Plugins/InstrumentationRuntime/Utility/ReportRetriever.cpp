@@ -217,8 +217,8 @@ bool ReportRetriever::NotifyBreakpointHit(ProcessSP process_sp,
         InstrumentationRuntimeStopInfo::CreateStopReasonWithInstrumentationData(
             *thread_sp, description, report));
 
-  if (StreamSP stream_sp =
-          process_sp->GetTarget().GetDebugger().GetAsyncOutputStream())
+  if (StreamFileSP stream_sp = StreamFileSP(
+          process_sp->GetTarget().GetDebugger().GetOutputStreamSP()))
     stream_sp->Printf("AddressSanitizer report breakpoint hit. Use 'thread "
                       "info -s' to get extended information about the "
                       "report.\n");

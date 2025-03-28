@@ -132,15 +132,20 @@ public:
   void SetAsyncExecution(bool async);
 
   lldb::FileSP GetInputFileSP() { return m_input_file_sp; }
+
+  lldb::StreamFileSP GetOutputStreamSP() { return m_output_stream_sp; }
+
+  lldb::StreamFileSP GetErrorStreamSP() { return m_error_stream_sp; }
+
   File &GetInputFile() { return *m_input_file_sp; }
 
-  lldb::FileSP GetOutputFileSP() {
-    return m_output_stream_sp->GetUnlockedFileSP();
-  }
+  File &GetOutputFile() { return m_output_stream_sp->GetFile(); }
 
-  lldb::FileSP GetErrorFileSP() {
-    return m_error_stream_sp->GetUnlockedFileSP();
-  }
+  File &GetErrorFile() { return m_error_stream_sp->GetFile(); }
+
+  StreamFile &GetOutputStream() { return *m_output_stream_sp; }
+
+  StreamFile &GetErrorStream() { return *m_error_stream_sp; }
 
   repro::DataRecorder *GetInputRecorder();
 
@@ -156,9 +161,9 @@ public:
 
   void RestoreInputTerminalState();
 
-  lldb::StreamUP GetAsyncOutputStream();
+  lldb::StreamSP GetAsyncOutputStream();
 
-  lldb::StreamUP GetAsyncErrorStream();
+  lldb::StreamSP GetAsyncErrorStream();
 
   CommandInterpreter &GetCommandInterpreter() {
     assert(m_command_interpreter_up.get());
@@ -201,8 +206,8 @@ public:
   // If any of the streams are not set, set them to the in/out/err stream of
   // the top most input reader to ensure they at least have something
   void AdoptTopIOHandlerFilesIfInvalid(lldb::FileSP &in,
-                                       lldb::LockableStreamFileSP &out,
-                                       lldb::LockableStreamFileSP &err);
+                                       lldb::StreamFileSP &out,
+                                       lldb::StreamFileSP &err);
 
   /// Run the given IO handler and return immediately.
   void RunIOHandlerAsync(const lldb::IOHandlerSP &reader_sp,
@@ -657,14 +662,6 @@ protected:
 
   void PrintProgress(const ProgressEventData &data);
 
-  /// Except for Debugger and IOHandler, GetOutputStreamSP and GetErrorStreamSP
-  /// should not be used directly. Use GetAsyncOutputStream and
-  /// GetAsyncErrorStream instead.
-  /// @{
-  lldb::LockableStreamFileSP GetOutputStreamSP() { return m_output_stream_sp; }
-  lldb::LockableStreamFileSP GetErrorStreamSP() { return m_error_stream_sp; }
-  /// @}
-
   void PushIOHandler(const lldb::IOHandlerSP &reader_sp,
                      bool cancel_top_handler = true);
 
@@ -705,9 +702,8 @@ protected:
 
   // these should never be NULL
   lldb::FileSP m_input_file_sp;
-  lldb::LockableStreamFileSP m_output_stream_sp;
-  lldb::LockableStreamFileSP m_error_stream_sp;
-  LockableStreamFile::Mutex m_output_mutex;
+  lldb::StreamFileSP m_output_stream_sp;
+  lldb::StreamFileSP m_error_stream_sp;
 
   /// Used for shadowing the input file when capturing a reproducer.
   repro::DataRecorder *m_input_recorder;

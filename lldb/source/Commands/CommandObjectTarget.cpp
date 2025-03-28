@@ -57,7 +57,6 @@
 #include "lldb/Utility/Timer.h"
 #include "lldb/ValueObject/ValueObjectVariable.h"
 #include "lldb/lldb-enumerations.h"
-#include "lldb/lldb-forward.h"
 #include "lldb/lldb-private-enumerations.h"
 
 #include "clang/Frontend/CompilerInstance.h"
@@ -4925,13 +4924,11 @@ Filter Options:
 
 protected:
   void IOHandlerActivated(IOHandler &io_handler, bool interactive) override {
-    if (interactive) {
-      if (lldb::LockableStreamFileSP output_sp =
-              io_handler.GetOutputStreamFileSP()) {
-        LockedStreamFile locked_stream = output_sp->Lock();
-        locked_stream.PutCString(
-            "Enter your stop hook command(s).  Type 'DONE' to end.\n");
-      }
+    StreamFileSP output_sp(io_handler.GetOutputStreamFileSP());
+    if (output_sp && interactive) {
+      output_sp->PutCString(
+          "Enter your stop hook command(s).  Type 'DONE' to end.\n");
+      output_sp->Flush();
     }
   }
 
@@ -4939,12 +4936,12 @@ protected:
                               std::string &line) override {
     if (m_stop_hook_sp) {
       if (line.empty()) {
-        if (lldb::LockableStreamFileSP error_sp =
-                io_handler.GetErrorStreamFileSP()) {
-          LockedStreamFile locked_stream = error_sp->Lock();
-          locked_stream.Printf("error: stop hook #%" PRIu64
-                               " aborted, no commands.\n",
-                               m_stop_hook_sp->GetID());
+        StreamFileSP error_sp(io_handler.GetErrorStreamFileSP());
+        if (error_sp) {
+          error_sp->Printf("error: stop hook #%" PRIu64
+                           " aborted, no commands.\n",
+                           m_stop_hook_sp->GetID());
+          error_sp->Flush();
         }
         Target *target = &GetTarget();
         if (target) {
@@ -4956,11 +4953,11 @@ protected:
             static_cast<Target::StopHookCommandLine *>(m_stop_hook_sp.get());
 
         hook_ptr->SetActionFromString(line);
-        if (lldb::LockableStreamFileSP output_sp =
-                io_handler.GetOutputStreamFileSP()) {
-          LockedStreamFile locked_stream = output_sp->Lock();
-          locked_stream.Printf("Stop hook #%" PRIu64 " added.\n",
-                               m_stop_hook_sp->GetID());
+        StreamFileSP output_sp(io_handler.GetOutputStreamFileSP());
+        if (output_sp) {
+          output_sp->Printf("Stop hook #%" PRIu64 " added.\n",
+                            m_stop_hook_sp->GetID());
+          output_sp->Flush();
         }
       }
       m_stop_hook_sp.reset();

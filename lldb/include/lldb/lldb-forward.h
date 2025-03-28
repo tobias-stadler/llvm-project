@@ -213,7 +213,6 @@ class StoppointCallbackContext;
 class Stream;
 class StreamFile;
 class StreamString;
-class LockableStreamFile;
 class StringList;
 class StringTableReader;
 class StructuredDataImpl;
@@ -428,9 +427,7 @@ typedef std::unique_ptr<lldb_private::StackFrameRecognizerManager>
     StackFrameRecognizerManagerUP;
 typedef std::shared_ptr<lldb_private::StopInfo> StopInfoSP;
 typedef std::shared_ptr<lldb_private::Stream> StreamSP;
-typedef std::unique_ptr<lldb_private::Stream> StreamUP;
 typedef std::shared_ptr<lldb_private::StreamFile> StreamFileSP;
-typedef std::shared_ptr<lldb_private::LockableStreamFile> LockableStreamFileSP;
 typedef std::shared_ptr<lldb_private::StringSummaryFormat>
     StringTypeSummaryImplSP;
 typedef std::unique_ptr<lldb_private::StructuredDataImpl> StructuredDataImplUP;

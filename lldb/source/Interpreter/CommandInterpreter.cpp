@@ -58,7 +58,6 @@
 #include "lldb/Utility/Timer.h"
 
 #include "lldb/Host/Config.h"
-#include "lldb/lldb-forward.h"
 #if LLDB_ENABLE_LIBEDIT
 #include "lldb/Host/Editline.h"
 #endif
@@ -2850,13 +2849,13 @@ void CommandInterpreter::HandleCommandsFromFile(FileSpec &cmd_file,
   }
 
   if (flags & eHandleCommandFlagPrintResult) {
-    debugger.GetOutputFileSP()->Printf("Executing commands in '%s'.\n",
-                                       cmd_file_path.c_str());
+    debugger.GetOutputFile().Printf("Executing commands in '%s'.\n",
+                                    cmd_file_path.c_str());
   }
 
   // Used for inheriting the right settings when "command source" might
   // have nested "command source" commands
-  lldb::LockableStreamFileSP empty_stream_sp;
+  lldb::StreamFileSP empty_stream_sp;
   m_command_source_flags.push_back(flags);
   IOHandlerSP io_handler_sp(new IOHandlerEditline(
       debugger, IOHandler::Type::CommandInterpreter, input_file_sp,
@@ -3113,26 +3112,25 @@ void CommandInterpreter::PrintCommandOutput(IOHandler &io_handler,
                                             llvm::StringRef str,
                                             bool is_stdout) {
 
-  lldb::LockableStreamFileSP stream = is_stdout
-                                          ? io_handler.GetOutputStreamFileSP()
-                                          : io_handler.GetErrorStreamFileSP();
+  lldb::StreamFileSP stream = is_stdout ? io_handler.GetOutputStreamFileSP()
+                                        : io_handler.GetErrorStreamFileSP();
   // Split the output into lines and poll for interrupt requests
   bool had_output = !str.empty();
   while (!str.empty()) {
     llvm::StringRef line;
     std::tie(line, str) = str.split('\n');
     {
-      LockedStreamFile stream_file = stream->Lock();
-      stream_file.Write(line.data(), line.size());
-      stream_file.Write("\n", 1);
+      std::lock_guard<std::recursive_mutex> guard(io_handler.GetOutputMutex());
+      stream->Write(line.data(), line.size());
+      stream->Write("\n", 1);
     }
   }
 
-  LockedStreamFile stream_file = stream->Lock();
+  std::lock_guard<std::recursive_mutex> guard(io_handler.GetOutputMutex());
   if (had_output &&
       INTERRUPT_REQUESTED(GetDebugger(), "Interrupted dumping command output"))
-    stream_file.Printf("\n... Interrupted.\n");
-  stream_file.Flush();
+    stream->Printf("\n... Interrupted.\n");
+  stream->Flush();
 }
 
 bool CommandInterpreter::EchoCommandNonInteractive(
@@ -3174,9 +3172,9 @@ void CommandInterpreter::IOHandlerInputComplete(IOHandler &io_handler,
     // from a file) we need to echo the command out so we don't just see the
     // command output and no command...
     if (EchoCommandNonInteractive(line, io_handler.GetFlags())) {
-      LockedStreamFile locked_stream =
-          io_handler.GetOutputStreamFileSP()->Lock();
-      locked_stream.Printf("%s%s\n", io_handler.GetPrompt(), line.c_str());
+      std::lock_guard<std::recursive_mutex> guard(io_handler.GetOutputMutex());
+      io_handler.GetOutputStreamFileSP()->Printf(
+          "%s%s\n", io_handler.GetPrompt(), line.c_str());
     }
   }
 

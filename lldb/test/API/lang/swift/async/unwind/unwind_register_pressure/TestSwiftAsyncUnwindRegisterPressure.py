@@ -6,6 +6,7 @@ import lldbsuite.test.lldbutil as lldbutil
 
 # This test is a best effort attempt at creating a program with high register
 # pressure while also making the linker avoid compact unwind.
+@skipIf(bugnumber='rdar://146182003')
 class TestCase(lldbtest.TestBase):
 
     mydir = lldbtest.TestBase.compute_mydir(__file__)

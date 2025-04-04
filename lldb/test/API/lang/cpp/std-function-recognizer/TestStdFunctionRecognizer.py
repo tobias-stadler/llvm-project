@@ -64,14 +64,14 @@ class LibCxxStdFunctionRecognizerTestCase(TestBase):
         (target, process, thread, bkpt) = lldbutil.run_to_source_breakpoint(
             self, "// break here", lldb.SBFileSpec("main.cpp")
         )
-        frame = thread.GetSelectedFrame()
+        frame = thread.selected_frame
         # up
         self.assertIn("foo", frame.GetFunctionName())
         start_idx = frame.GetFrameID()
         i = 0
         while i < thread.GetNumFrames():
             self.expect("up")
-            frame = thread.GetSelectedFrame()
+            frame = thread.selected_frame
             if frame.GetFunctionName() == "main":
                 break
         end_idx = frame.GetFrameID()
@@ -81,7 +81,7 @@ class LibCxxStdFunctionRecognizerTestCase(TestBase):
         start_idx = frame.GetFrameID()
         for i in range(1, thread.GetNumFrames()):
             self.expect("down")
-            frame = thread.GetSelectedFrame()
+            frame = thread.selected_frame
             if "foo" in frame.GetFunctionName():
                 break
         end_idx = frame.GetFrameID()
@@ -94,11 +94,8 @@ class LibCxxStdFunctionRecognizerTestCase(TestBase):
         (target, process, thread, bkpt) = lldbutil.run_to_source_breakpoint(
             self, "// break here", lldb.SBFileSpec("main.cpp")
         )
-        frame = thread.GetSelectedFrame()
         num_hidden = 0
-        for i in range(1, thread.GetNumFrames()):
-            thread.SetSelectedFrame(i)
-            frame = thread.GetSelectedFrame()
+        for frame in thread.frames:
             if frame.IsHidden():
                 num_hidden += 1
 

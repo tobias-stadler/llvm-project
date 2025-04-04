@@ -52,6 +52,7 @@
 #include "lldb/Utility/State.h"
 #include "lldb/Utility/Stream.h"
 #include "lldb/Utility/StreamString.h"
+#include "lldb/Version/Version.h"
 #include "lldb/lldb-enumerations.h"
 
 #if defined(_WIN32)

@@ -861,9 +861,16 @@ Generic load. Expects a MachineMemOperand in addition to explicit
 operands. If the result size is larger than the memory size, the
 high bits are undefined, sign-extended, or zero-extended respectively.
 
-Only G_LOAD is valid if the result is a vector type. If the result is larger
-than the memory size, the high elements are undefined (i.e. this is not a
-per-element, vector anyextload)
+If both the result value type (<ValElems x ValElemTy>) and the memory type
+(<MemElems x MemElemTy>) are vectors:
+* and ValElemTy is larger than ValElemTy: the high bits of each vector element
+  are extended according to the opcode (i.e. this acts as a per-lane
+  anyext/zext/sext load).
+* and ValElemTy is larger than MemElems: the high elements are undefined.
+
+Note that if either the result value type or memory type is scalar (e.g.
+loading <4 x s8> from s28), extension applies to the high bits of the entire
+value instead of per-lane.
 
 Unlike in SelectionDAG, atomic loads are expressed with the same
 opcodes as regular loads. G_LOAD, G_SEXTLOAD and G_ZEXTLOAD may all
@@ -889,11 +896,19 @@ Same as G_INDEXED_LOAD except that the load performed is zero-extending, as with
 G_STORE
 ^^^^^^^
 
-Generic store. Expects a MachineMemOperand in addition to explicit
-operands. If the stored value size is greater than the memory size,
-the high bits are implicitly truncated. If this is a vector store, the
-high elements are discarded (i.e. this does not function as a per-lane
-vector, truncating store)
+Generic store. Expects a MachineMemOperand in addition to explicit operands.
+If the stored value size is greater than the memory size, the high bits are
+implicitly truncated.
+
+If both the stored value type (<ValElems x ValElemTy>) and the memory type
+(<MemElems x MemElemTy>) are vectors:
+* and MemElemTy is smaller than ValElemTy: the high bits of each vector element
+  are truncated (i.e. this acts as a per-lane truncating store).
+* and MemElms is smaller than MemElems: the high elements are discarded.
+
+Note that if either the stored value type or memory type is scalar (e.g.
+storing <4 x s8> as s28), truncation applies to the high bits of the entire
+value instead of per-lane.
 
 G_INDEXED_STORE
 ^^^^^^^^^^^^^^^

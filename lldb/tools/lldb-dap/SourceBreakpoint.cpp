@@ -13,6 +13,7 @@
 #include "lldb/API/SBBreakpoint.h"
 #include "lldb/API/SBFileSpecList.h"
 #include "lldb/API/SBFrame.h"
+#include "lldb/API/SBMutex.h"
 #include "lldb/API/SBTarget.h"
 #include "lldb/API/SBThread.h"
 #include "lldb/API/SBValue.h"
@@ -20,6 +21,7 @@
 #include <cassert>
 #include <cctype>
 #include <cstdlib>
+#include <mutex>
 #include <utility>
 
 namespace lldb_dap {
@@ -31,6 +33,9 @@ SourceBreakpoint::SourceBreakpoint(DAP &dap, const llvm::json::Object &obj)
 }
 
 void SourceBreakpoint::SetBreakpoint(const llvm::StringRef source_path) {
+  lldb::SBMutex lock = dap.GetAPIMutex();
+  std::lock_guard<lldb::SBMutex> guard(lock);
+
   lldb::SBFileSpecList module_list;
   bp = dap.target.BreakpointCreateByLocation(source_path.str().c_str(), line,
                                              column, 0, module_list);

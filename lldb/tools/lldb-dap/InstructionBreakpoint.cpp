@@ -11,8 +11,10 @@
 #include "DAP.h"
 #include "JSONUtils.h"
 #include "lldb/API/SBBreakpoint.h"
+#include "lldb/API/SBMutex.h"
 #include "lldb/API/SBTarget.h"
 #include "llvm/ADT/StringRef.h"
+#include <mutex>
 
 namespace lldb_dap {
 
@@ -27,6 +29,9 @@ InstructionBreakpoint::InstructionBreakpoint(DAP &d,
 }
 
 void InstructionBreakpoint::SetBreakpoint() {
+  lldb::SBMutex lock = dap.GetAPIMutex();
+  std::lock_guard<lldb::SBMutex> guard(lock);
+
   bp = dap.target.BreakpointCreateByAddress(instructionAddressReference);
   Breakpoint::SetBreakpoint();
 }

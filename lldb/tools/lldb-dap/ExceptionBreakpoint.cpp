@@ -9,7 +9,9 @@
 #include "ExceptionBreakpoint.h"
 #include "BreakpointBase.h"
 #include "DAP.h"
+#include "lldb/API/SBMutex.h"
 #include "lldb/API/SBTarget.h"
+#include <mutex>
 
 namespace lldb_dap {
 
@@ -26,6 +28,9 @@ void ExceptionBreakpoint::SetBreakpoint() {
 }
 
 void ExceptionBreakpoint::ClearBreakpoint() {
+  lldb::SBMutex lock = dap.GetAPIMutex();
+  std::lock_guard<lldb::SBMutex> guard(lock);
+
   if (!bp.IsValid())
     return;
   dap.target.BreakpointDelete(bp.GetID());

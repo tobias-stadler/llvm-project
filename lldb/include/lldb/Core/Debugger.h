@@ -311,7 +311,6 @@ public:
   bool GetShowStatusline() const;
 
   const FormatEntity::Entry *GetStatuslineFormat() const;
-  bool SetStatuslineFormat(const FormatEntity::Entry &format);
 
   llvm::StringRef GetShowProgressAnsiPrefix() const;
 

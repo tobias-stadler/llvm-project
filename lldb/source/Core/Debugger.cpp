@@ -52,6 +52,7 @@
 #include "lldb/Utility/State.h"
 #include "lldb/Utility/Stream.h"
 #include "lldb/Utility/StreamString.h"
+#include "lldb/Version/Version.h"
 #include "lldb/lldb-enumerations.h"
 
 #if defined(_WIN32)
@@ -1553,8 +1554,9 @@ bool Debugger::FormatDisassemblerAddress(const FormatEntity::Entry *format,
 void Debugger::AssertCallback(llvm::StringRef message,
                               llvm::StringRef backtrace,
                               llvm::StringRef prompt) {
-  Debugger::ReportError(
-      llvm::formatv("{0}\n{1}{2}", message, backtrace, prompt).str());
+  Debugger::ReportError(llvm::formatv("{0}\n{1}{2}\n{3}", message, backtrace,
+                                      GetVersion(), prompt)
+                            .str());
 }
 
 void Debugger::SetLoggingCallback(lldb::LogOutputCallback log_callback,

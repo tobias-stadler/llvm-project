@@ -614,9 +614,7 @@ void Process::Finalize(bool destructing) {
   // contain events that have ProcessSP values in them which can keep this
   // process around forever. These events need to be cleared out.
   m_private_state_listener_sp->Clear();
-  m_public_run_lock.TrySetRunning(); // This will do nothing if already locked
   m_public_run_lock.SetStopped();
-  m_private_run_lock.TrySetRunning(); // This will do nothing if already locked
   m_private_run_lock.SetStopped();
   m_structured_data_plugin_map.clear();
 }
@@ -1466,11 +1464,11 @@ void Process::SetPublicState(StateType new_state, bool restarted) {
 Status Process::Resume() {
   Log *log(GetLog(LLDBLog::State | LLDBLog::Process));
   LLDB_LOGF(log, "(plugin = %s) -- locking run lock", GetPluginName().data());
-  if (!m_public_run_lock.TrySetRunning()) {
-    LLDB_LOGF(log, "(plugin = %s) -- TrySetRunning failed, not resuming.",
-             GetPluginName().data());
+  if (!m_public_run_lock.SetRunning()) {
+    LLDB_LOGF(log, "(plugin = %s) -- SetRunning failed, not resuming.",
+              GetPluginName().data());
     return Status::FromErrorString(
-        "Resume request failed - process still running.");
+        "resume request failed - process already running");
   }
   Status error = PrivateResume();
   if (!error.Success()) {
@@ -1483,10 +1481,10 @@ Status Process::Resume() {
 Status Process::ResumeSynchronous(Stream *stream) {
   Log *log(GetLog(LLDBLog::State | LLDBLog::Process));
   LLDB_LOGF(log, "Process::ResumeSynchronous -- locking run lock");
-  if (!m_public_run_lock.TrySetRunning()) {
-    LLDB_LOGF(log, "Process::Resume: -- TrySetRunning failed, not resuming.");
+  if (!m_public_run_lock.SetRunning()) {
+    LLDB_LOGF(log, "Process::Resume: -- SetRunning failed, not resuming.");
     return Status::FromErrorString(
-        "Resume request failed - process still running.");
+        "resume request failed: process already running");
   }
 
   ListenerSP listener_sp(
@@ -2818,13 +2816,8 @@ Status Process::LaunchPrivate(ProcessLaunchInfo &launch_info, StateType &state,
   SetPublicState(eStateLaunching, restarted);
   m_should_detach = false;
 
-  if (m_public_run_lock.TrySetRunning()) {
-    // Now launch using these arguments.
-    error = DoLaunch(exe_module, launch_info);
-  } else {
-    // This shouldn't happen
-    error = Status::FromErrorString("failed to acquire process run lock");
-  }
+  m_public_run_lock.SetRunning();
+  error = DoLaunch(exe_module, launch_info);
 
   if (error.Fail()) {
     if (GetID() != LLDB_INVALID_PROCESS_ID) {
@@ -3089,17 +3082,12 @@ Status Process::Attach(ProcessAttachInfo &attach_info) {
       if (wait_for_launch) {
         error = WillAttachToProcessWithName(process_name, wait_for_launch);
         if (error.Success()) {
-          if (m_public_run_lock.TrySetRunning()) {
-            m_should_detach = true;
-            const bool restarted = false;
-            SetPublicState(eStateAttaching, restarted);
-            // Now attach using these arguments.
-            error = DoAttachToProcessWithName(process_name, attach_info);
-          } else {
-            // This shouldn't happen
-            error =
-                Status::FromErrorString("failed to acquire process run lock");
-          }
+          m_public_run_lock.SetRunning();
+          m_should_detach = true;
+          const bool restarted = false;
+          SetPublicState(eStateAttaching, restarted);
+          // Now attach using these arguments.
+          error = DoAttachToProcessWithName(process_name, attach_info);
 
           if (error.Fail()) {
             if (GetID() != LLDB_INVALID_PROCESS_ID) {
@@ -3160,17 +3148,13 @@ Status Process::Attach(ProcessAttachInfo &attach_info) {
   if (attach_pid != LLDB_INVALID_PROCESS_ID) {
     error = WillAttachToProcessWithID(attach_pid);
     if (error.Success()) {
+      m_public_run_lock.SetRunning();
 
-      if (m_public_run_lock.TrySetRunning()) {
-        // Now attach using these arguments.
-        m_should_detach = true;
-        const bool restarted = false;
-        SetPublicState(eStateAttaching, restarted);
-        error = DoAttachToProcessWithID(attach_pid, attach_info);
-      } else {
-        // This shouldn't happen
-        error = Status::FromErrorString("failed to acquire process run lock");
-      }
+      // Now attach using these arguments.
+      m_should_detach = true;
+      const bool restarted = false;
+      SetPublicState(eStateAttaching, restarted);
+      error = DoAttachToProcessWithID(attach_pid, attach_info);
 
       if (error.Success()) {
         SetNextEventAction(new Process::AttachCompletionHandler(
@@ -5951,10 +5935,9 @@ void Process::ClearPreResumeAction(PreResumeActionCallback callback, void *baton
 }
 
 ProcessRunLock &Process::GetRunLock() {
-  if (m_private_state_thread.EqualsThread(Host::GetCurrentThread()))
+  if (Process::CurrentThreadIsPrivateStateThread())
     return m_private_run_lock;
-  else
-    return m_public_run_lock;
+  return m_public_run_lock;
 }
 
 bool Process::CurrentThreadIsPrivateStateThread()

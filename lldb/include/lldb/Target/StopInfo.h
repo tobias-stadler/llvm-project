@@ -117,6 +117,17 @@ public:
 
   StructuredData::ObjectSP GetExtendedInfo() { return m_extended_info; }
 
+  /// Returns true if this is a stop reason that should be shown to a user when
+  /// stopping.
+  virtual bool ShouldShow() const { return IsValid(); }
+
+  /// Returns true if this is a stop reason that should cause a thread to be
+  /// selected when stopping.
+  virtual bool ShouldSelect() const {
+    return GetStopReason() != lldb::eStopReasonNone &&
+           GetStopReason() != lldb::eStopReasonInvalid;
+  }
+
   static lldb::StopInfoSP
   CreateStopReasonWithBreakpointSiteID(Thread &thread,
                                        lldb::break_id_t break_id);

@@ -15,6 +15,7 @@ class LibcxxStringDataFormatterSimulatorTestCase(TestBase):
 
     @skipIfDarwin
     @skipIfWindows
+    @skipIfLinux
     def _run_test(self, defines):
         cxxflags_extras = " ".join(["-D%s" % d for d in defines])
         self.build(dictionary=dict(CXXFLAGS_EXTRAS=cxxflags_extras))

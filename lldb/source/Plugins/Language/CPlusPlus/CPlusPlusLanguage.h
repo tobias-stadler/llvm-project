@@ -138,10 +138,15 @@ public:
   ConstString
   GetDemangledFunctionNameWithoutArguments(Mangled mangled) const override;
 
-  bool GetFunctionDisplayName(const SymbolContext *sc,
+  bool GetFunctionDisplayName(const SymbolContext &sc,
                               const ExecutionContext *exe_ctx,
                               FunctionNameRepresentation representation,
                               Stream &s) override;
+
+  bool HandleFrameFormatVariable(const SymbolContext &sc,
+                                 const ExecutionContext *exe_ctx,
+                                 FormatEntity::Entry::Type type,
+                                 Stream &s) override;
 
   static bool IsCPPMangledName(llvm::StringRef name);
 
@@ -169,8 +174,13 @@ public:
 
   llvm::StringRef GetInstanceVariableName() override { return "this"; }
 
+  const FormatEntity::Entry *GetFunctionNameFormat() const override;
+
   // PluginInterface protocol
   llvm::StringRef GetPluginName() override { return GetPluginNameStatic(); }
+
+private:
+  static void DebuggerInitialize(Debugger &);
 };
 
 } // namespace lldb_private

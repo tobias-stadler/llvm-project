@@ -15,6 +15,7 @@
 #include <set>
 #include <vector>
 
+#include "lldb/Core/FormatEntity.h"
 #include "lldb/Core/Highlighter.h"
 #include "lldb/Core/PluginInterface.h"
 #include "lldb/DataFormatters/DumpValueObjectOptions.h"
@@ -270,10 +271,17 @@ public:
   // the reference has never been assigned
   virtual bool IsUninitializedReference(ValueObject &valobj);
 
-  virtual bool GetFunctionDisplayName(const SymbolContext *sc,
+  virtual bool GetFunctionDisplayName(const SymbolContext &sc,
                                       const ExecutionContext *exe_ctx,
                                       FunctionNameRepresentation representation,
                                       Stream &s);
+
+  virtual bool HandleFrameFormatVariable(const SymbolContext &sc,
+                                         const ExecutionContext *exe_ctx,
+                                         FormatEntity::Entry::Type type,
+                                         Stream &s) {
+    return false;
+  }
 
   virtual ConstString
   GetDemangledFunctionNameWithoutArguments(Mangled mangled) const {
@@ -390,6 +398,10 @@ public:
   /// Returns the keyword used for catch statements in this language, e.g.
   /// Python uses \b except. Defaults to \b catch.
   virtual llvm::StringRef GetCatchKeyword() const { return "catch"; }
+
+  virtual const FormatEntity::Entry *GetFunctionNameFormat() const {
+    return nullptr;
+  }
 
 protected:
   // Classes that inherit from Language can see and modify these

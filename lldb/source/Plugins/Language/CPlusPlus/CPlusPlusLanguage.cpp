@@ -27,6 +27,7 @@
 #include "lldb/DataFormatters/DataVisualization.h"
 #include "lldb/DataFormatters/FormattersHelpers.h"
 #include "lldb/DataFormatters/VectorType.h"
+#include "lldb/Interpreter/OptionValueProperties.h"
 #include "lldb/Symbol/SymbolFile.h"
 #include "lldb/Symbol/VariableList.h"
 #include "lldb/Utility/ConstString.h"
@@ -55,7 +56,7 @@ LLDB_PLUGIN_DEFINE(CPlusPlusLanguage)
 
 void CPlusPlusLanguage::Initialize() {
   PluginManager::RegisterPlugin(GetPluginNameStatic(), "C++ Language",
-                                CreateInstance);
+                                CreateInstance, &DebuggerInitialize);
 }
 
 void CPlusPlusLanguage::Terminate() {
@@ -204,6 +205,179 @@ static bool PrettyPrintFunctionNameWithArgs(Stream &out_stream,
     out_stream.PutChar(' ');
     out_stream.PutCString(qualifiers);
   }
+
+  return true;
+}
+
+static std::optional<llvm::StringRef>
+GetDemangledBasename(const SymbolContext &sc) {
+  Mangled mangled = sc.GetPossiblyInlinedFunctionName();
+  if (!mangled)
+    return std::nullopt;
+
+  auto demangled_name = mangled.GetDemangledName().GetStringRef();
+  if (demangled_name.empty())
+    return std::nullopt;
+
+  const std::optional<DemangledNameInfo> &info = mangled.GetDemangledInfo();
+  if (!info)
+    return std::nullopt;
+
+  // Function without a basename is nonsense.
+  if (!info->hasBasename())
+    return std::nullopt;
+
+  return demangled_name.slice(info->BasenameRange.first,
+                              info->BasenameRange.second);
+}
+
+static std::optional<llvm::StringRef>
+GetDemangledTemplateArguments(const SymbolContext &sc) {
+  Mangled mangled = sc.GetPossiblyInlinedFunctionName();
+  if (!mangled)
+    return std::nullopt;
+
+  auto demangled_name = mangled.GetDemangledName().GetStringRef();
+  if (demangled_name.empty())
+    return std::nullopt;
+
+  const std::optional<DemangledNameInfo> &info = mangled.GetDemangledInfo();
+  if (!info)
+    return std::nullopt;
+
+  // Function without a basename is nonsense.
+  if (!info->hasBasename())
+    return std::nullopt;
+
+  if (info->ArgumentsRange.first < info->BasenameRange.second)
+    return std::nullopt;
+
+  return demangled_name.slice(info->BasenameRange.second,
+                              info->ArgumentsRange.first);
+}
+
+static std::optional<llvm::StringRef>
+GetDemangledReturnTypeLHS(const SymbolContext &sc) {
+  Mangled mangled = sc.GetPossiblyInlinedFunctionName();
+  if (!mangled)
+    return std::nullopt;
+
+  auto demangled_name = mangled.GetDemangledName().GetStringRef();
+  if (demangled_name.empty())
+    return std::nullopt;
+
+  const std::optional<DemangledNameInfo> &info = mangled.GetDemangledInfo();
+  if (!info)
+    return std::nullopt;
+
+  // Function without a basename is nonsense.
+  if (!info->hasBasename())
+    return std::nullopt;
+
+  if (info->ScopeRange.first >= demangled_name.size())
+    return std::nullopt;
+
+  return demangled_name.substr(0, info->ScopeRange.first);
+}
+
+static std::optional<llvm::StringRef>
+GetDemangledFunctionQualifiers(const SymbolContext &sc) {
+  Mangled mangled = sc.GetPossiblyInlinedFunctionName();
+  if (!mangled)
+    return std::nullopt;
+
+  auto demangled_name = mangled.GetDemangledName().GetStringRef();
+  if (demangled_name.empty())
+    return std::nullopt;
+
+  const std::optional<DemangledNameInfo> &info = mangled.GetDemangledInfo();
+  if (!info)
+    return std::nullopt;
+
+  // Function without a basename is nonsense.
+  if (!info->hasBasename())
+    return std::nullopt;
+
+  if (info->QualifiersRange.second < info->QualifiersRange.first)
+    return std::nullopt;
+
+  return demangled_name.slice(info->QualifiersRange.first,
+                              info->QualifiersRange.second);
+}
+
+static std::optional<llvm::StringRef>
+GetDemangledReturnTypeRHS(const SymbolContext &sc) {
+  Mangled mangled = sc.GetPossiblyInlinedFunctionName();
+  if (!mangled)
+    return std::nullopt;
+
+  auto demangled_name = mangled.GetDemangledName().GetStringRef();
+  if (demangled_name.empty())
+    return std::nullopt;
+
+  const std::optional<DemangledNameInfo> &info = mangled.GetDemangledInfo();
+  if (!info)
+    return std::nullopt;
+
+  // Function without a basename is nonsense.
+  if (!info->hasBasename())
+    return std::nullopt;
+
+  if (info->QualifiersRange.first < info->ArgumentsRange.second)
+    return std::nullopt;
+
+  return demangled_name.slice(info->ArgumentsRange.second,
+                              info->QualifiersRange.first);
+}
+
+static std::optional<llvm::StringRef>
+GetDemangledScope(const SymbolContext &sc) {
+  Mangled mangled = sc.GetPossiblyInlinedFunctionName();
+  if (!mangled)
+    return std::nullopt;
+
+  auto demangled_name = mangled.GetDemangledName().GetStringRef();
+  if (demangled_name.empty())
+    return std::nullopt;
+
+  const std::optional<DemangledNameInfo> &info = mangled.GetDemangledInfo();
+  if (!info)
+    return std::nullopt;
+
+  // Function without a basename is nonsense.
+  if (!info->hasBasename())
+    return std::nullopt;
+
+  if (info->ScopeRange.second < info->ScopeRange.first)
+    return std::nullopt;
+
+  return demangled_name.slice(info->ScopeRange.first, info->ScopeRange.second);
+}
+
+static bool PrintDemangledArgumentList(Stream &s, const SymbolContext &sc) {
+  assert(sc.symbol);
+
+  Mangled mangled = sc.GetPossiblyInlinedFunctionName();
+  if (!mangled)
+    return false;
+
+  auto demangled_name = mangled.GetDemangledName().GetStringRef();
+  if (demangled_name.empty())
+    return false;
+
+  const std::optional<DemangledNameInfo> &info = mangled.GetDemangledInfo();
+  if (!info)
+    return false;
+
+  // Function without a basename is nonsense.
+  if (!info->hasBasename())
+    return false;
+
+  if (info->ArgumentsRange.second < info->ArgumentsRange.first)
+    return false;
+
+  s << demangled_name.slice(info->ArgumentsRange.first,
+                            info->ArgumentsRange.second);
 
   return true;
 }
@@ -1699,65 +1873,201 @@ bool CPlusPlusLanguage::IsSourceFile(llvm::StringRef file_path) const {
   return file_path.contains("/usr/include/c++/");
 }
 
+static VariableListSP GetFunctionVariableList(const SymbolContext &sc) {
+  assert(sc.function);
+
+  if (sc.block)
+    if (Block *inline_block = sc.block->GetContainingInlinedBlock())
+      return inline_block->GetBlockVariableList(true);
+
+  return sc.function->GetBlock(true).GetBlockVariableList(true);
+}
+
+static bool PrintFunctionNameWithArgs(Stream &s,
+                                      const ExecutionContext *exe_ctx,
+                                      const SymbolContext &sc) {
+  assert(sc.function);
+
+  ExecutionContextScope *exe_scope =
+      exe_ctx ? exe_ctx->GetBestExecutionContextScope() : nullptr;
+
+  const char *cstr = sc.GetPossiblyInlinedFunctionName()
+                         .GetName(Mangled::NamePreference::ePreferDemangled)
+                         .AsCString();
+  if (!cstr)
+    return false;
+
+  VariableList args;
+  if (auto variable_list_sp = GetFunctionVariableList(sc))
+    variable_list_sp->AppendVariablesWithScope(eValueTypeVariableArgument,
+                                               args);
+
+  if (args.GetSize() > 0)
+    return PrettyPrintFunctionNameWithArgs(s, cstr, exe_scope, args);
+
+  // FIXME: can we just unconditionally call PrettyPrintFunctionNameWithArgs?
+  // It should be able to handle the "no arguments" case.
+  s.PutCString(cstr);
+
+  return true;
+}
+
 bool CPlusPlusLanguage::GetFunctionDisplayName(
-    const SymbolContext *sc, const ExecutionContext *exe_ctx,
+    const SymbolContext &sc, const ExecutionContext *exe_ctx,
     FunctionNameRepresentation representation, Stream &s) {
   switch (representation) {
   case FunctionNameRepresentation::eNameWithArgs: {
     // Print the function name with arguments in it
-    if (sc->function) {
-      ExecutionContextScope *exe_scope =
-          exe_ctx ? exe_ctx->GetBestExecutionContextScope() : nullptr;
-      const char *cstr = sc->function->GetName().AsCString(nullptr);
-      if (cstr) {
-        const InlineFunctionInfo *inline_info = nullptr;
-        VariableListSP variable_list_sp;
-        bool get_function_vars = true;
-        if (sc->block) {
-          Block *inline_block = sc->block->GetContainingInlinedBlock();
+    if (sc.function)
+      return PrintFunctionNameWithArgs(s, exe_ctx, sc);
 
-          if (inline_block) {
-            get_function_vars = false;
-            inline_info = inline_block->GetInlinedFunctionInfo();
-            if (inline_info)
-              variable_list_sp = inline_block->GetBlockVariableList(true);
-          }
-        }
+    if (!sc.symbol)
+      return false;
 
-        if (get_function_vars) {
-          variable_list_sp =
-              sc->function->GetBlock(true).GetBlockVariableList(true);
-        }
+    const char *cstr = sc.symbol->GetName().AsCString(nullptr);
+    if (!cstr)
+      return false;
 
-        if (inline_info) {
-          s.PutCString(cstr);
-          s.PutCString(" [inlined] ");
-          cstr = inline_info->GetName().GetCString();
-        }
+    s.PutCString(cstr);
 
-        VariableList args;
-        if (variable_list_sp)
-          variable_list_sp->AppendVariablesWithScope(eValueTypeVariableArgument,
-                                                     args);
-        if (args.GetSize() > 0) {
-          if (!PrettyPrintFunctionNameWithArgs(s, cstr, exe_scope, args))
-            return false;
-        } else {
-          s.PutCString(cstr);
-        }
-        return true;
-      }
-    } else if (sc->symbol) {
-      const char *cstr = sc->symbol->GetName().AsCString(nullptr);
-      if (cstr) {
-        s.PutCString(cstr);
-        return true;
-      }
-    }
-  } break;
+    return true;
+  }
+  case FunctionNameRepresentation::eNameWithNoArgs:
+  case FunctionNameRepresentation::eName:
+    return false;
+  }
+}
+
+bool CPlusPlusLanguage::HandleFrameFormatVariable(
+    const SymbolContext &sc, const ExecutionContext *exe_ctx,
+    FormatEntity::Entry::Type type, Stream &s) {
+  switch (type) {
+  case FormatEntity::Entry::Type::FunctionScope: {
+    std::optional<llvm::StringRef> scope = GetDemangledScope(sc);
+    if (!scope)
+      return false;
+
+    s << *scope;
+
+    return true;
+  }
+
+  case FormatEntity::Entry::Type::FunctionBasename: {
+    std::optional<llvm::StringRef> name = GetDemangledBasename(sc);
+    if (!name)
+      return false;
+
+    s << *name;
+
+    return true;
+  }
+
+  case FormatEntity::Entry::Type::FunctionTemplateArguments: {
+    std::optional<llvm::StringRef> template_args =
+        GetDemangledTemplateArguments(sc);
+    if (!template_args)
+      return false;
+
+    s << *template_args;
+
+    return true;
+  }
+
+  case FormatEntity::Entry::Type::FunctionFormattedArguments: {
+    // This ensures we print the arguments even when no debug-info is available.
+    //
+    // FIXME: we should have a Entry::Type::FunctionArguments and
+    // use it in the plugin.cplusplus.display.function-name-format
+    // once we have a "fallback operator" in the frame-format language.
+    if (!sc.function && sc.symbol)
+      return PrintDemangledArgumentList(s, sc);
+
+    VariableList args;
+    if (auto variable_list_sp = GetFunctionVariableList(sc))
+      variable_list_sp->AppendVariablesWithScope(eValueTypeVariableArgument,
+                                                 args);
+
+    ExecutionContextScope *exe_scope =
+        exe_ctx ? exe_ctx->GetBestExecutionContextScope() : nullptr;
+
+    s << '(';
+    FormatEntity::PrettyPrintFunctionArguments(s, args, exe_scope);
+    s << ')';
+
+    return true;
+  }
+  case FormatEntity::Entry::Type::FunctionReturnRight: {
+    std::optional<llvm::StringRef> return_rhs = GetDemangledReturnTypeRHS(sc);
+    if (!return_rhs)
+      return false;
+
+    s << *return_rhs;
+
+    return true;
+  }
+  case FormatEntity::Entry::Type::FunctionReturnLeft: {
+    std::optional<llvm::StringRef> return_lhs = GetDemangledReturnTypeLHS(sc);
+    if (!return_lhs)
+      return false;
+
+    s << *return_lhs;
+
+    return true;
+  }
+  case FormatEntity::Entry::Type::FunctionQualifiers: {
+    std::optional<llvm::StringRef> quals = GetDemangledFunctionQualifiers(sc);
+    if (!quals)
+      return false;
+
+    s << *quals;
+
+    return true;
+  }
   default:
     return false;
   }
+}
 
-  return false;
+#define LLDB_PROPERTIES_language_cplusplus
+#include "LanguageCPlusPlusProperties.inc"
+
+enum {
+#define LLDB_PROPERTIES_language_cplusplus
+#include "LanguageCPlusPlusPropertiesEnum.inc"
+};
+
+namespace {
+class PluginProperties : public Properties {
+public:
+  static llvm::StringRef GetSettingName() { return "display"; }
+
+  PluginProperties() {
+    m_collection_sp = std::make_shared<OptionValueProperties>(GetSettingName());
+    m_collection_sp->Initialize(g_language_cplusplus_properties);
+  }
+
+  const FormatEntity::Entry *GetFunctionNameFormat() const {
+    return GetPropertyAtIndexAs<const FormatEntity::Entry *>(
+        ePropertyFunctionNameFormat);
+  }
+};
+} // namespace
+
+static PluginProperties &GetGlobalPluginProperties() {
+  static PluginProperties g_settings;
+  return g_settings;
+}
+
+const FormatEntity::Entry *CPlusPlusLanguage::GetFunctionNameFormat() const {
+  return GetGlobalPluginProperties().GetFunctionNameFormat();
+}
+
+void CPlusPlusLanguage::DebuggerInitialize(Debugger &debugger) {
+  if (!PluginManager::GetSettingForCPlusPlusLanguagePlugin(
+          debugger, PluginProperties::GetSettingName())) {
+    PluginManager::CreateSettingForCPlusPlusLanguagePlugin(
+        debugger, GetGlobalPluginProperties().GetValueProperties(),
+        "Properties for the CPlusPlus language plug-in.",
+        /*is_global_property=*/true);
+  }
 }

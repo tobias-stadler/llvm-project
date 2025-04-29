@@ -683,14 +683,16 @@ void SetSourceMapFromArguments(DAP &dap, const llvm::json::Object &arguments) {
 //
 // s=3,l=3 = [th0->s3, label1, th1->s0]
 bool FillStackFrames(DAP &dap, lldb::SBThread &thread,
+                     lldb::SBFormat &frame_format,
                      llvm::json::Array &stack_frames, int64_t &offset,
-                     const int64_t start_frame, const int64_t levels) {
+                     const int64_t start_frame, const int64_t levels,
+                     const bool include_all) {
   bool reached_end_of_stack = false;
   for (int64_t i = start_frame;
        static_cast<int64_t>(stack_frames.size()) < levels; i++) {
     if (i == -1) {
       stack_frames.emplace_back(
-          CreateExtendedStackFrameLabel(thread, dap.frame_format));
+          CreateExtendedStackFrameLabel(thread, frame_format));
       continue;
     }
 
@@ -701,10 +703,10 @@ bool FillStackFrames(DAP &dap, lldb::SBThread &thread,
       break;
     }
 
-    stack_frames.emplace_back(CreateStackFrame(frame, dap.frame_format));
+    stack_frames.emplace_back(CreateStackFrame(frame, frame_format));
   }
 
-  if (dap.display_extended_backtrace && reached_end_of_stack) {
+  if (include_all && reached_end_of_stack) {
     // Check for any extended backtraces.
     for (uint32_t bt = 0;
          bt < thread.GetProcess().GetNumExtendedBacktraceTypes(); bt++) {
@@ -714,8 +716,9 @@ bool FillStackFrames(DAP &dap, lldb::SBThread &thread,
         continue;
 
       reached_end_of_stack = FillStackFrames(
-          dap, backtrace, stack_frames, offset,
-          (start_frame - offset) > 0 ? start_frame - offset : -1, levels);
+          dap, backtrace, frame_format, stack_frames, offset,
+          (start_frame - offset) > 0 ? start_frame - offset : -1, levels,
+          include_all);
       if (static_cast<int64_t>(stack_frames.size()) >= levels)
         break;
     }
@@ -3579,13 +3582,51 @@ void request_stackTrace(DAP &dap, const llvm::json::Object &request) {
   llvm::json::Array stack_frames;
   llvm::json::Object body;
 
+  lldb::SBFormat frame_format = dap.frame_format;
+  bool include_all = dap.display_extended_backtrace;
+
+  if (const auto *format = arguments->getObject("format")) {
+    // Indicates that all stack frames should be included, even those the debug
+    // adapter might otherwise hide.
+    include_all = GetBoolean(format, "includeAll", false);
+
+    // Parse the properties that have a corresponding format string.
+    // FIXME: Support "parameterTypes" and "hex".
+    const bool module = GetBoolean(format, "module", false);
+    const bool line = GetBoolean(format, "line", false);
+    const bool parameters = GetBoolean(format, "parameters", false);
+    const bool parameter_names = GetBoolean(format, "parameterNames", false);
+    const bool parameter_values = GetBoolean(format, "parameterValues", false);
+
+    // Only change the format string if we have to.
+    if (module || line || parameters || parameter_names || parameter_values) {
+      std::string format_str;
+      llvm::raw_string_ostream os(format_str);
+
+      if (module)
+        os << "{${module.file.basename} }";
+
+      if (line)
+        os << "{${line.file.basename}:${line.number}:${line.column} }";
+
+      if (parameters || parameter_names || parameter_values)
+        os << "{${function.name-with-args}}";
+      else
+        os << "{${function.name-without-args}}";
+
+      lldb::SBError error;
+      frame_format = lldb::SBFormat(format_str.c_str(), error);
+      assert(error.Success());
+    }
+  }
+
   if (thread.IsValid()) {
     const auto start_frame = GetUnsigned(arguments, "startFrame", 0);
     const auto levels = GetUnsigned(arguments, "levels", 0);
     int64_t offset = 0;
-    bool reached_end_of_stack =
-        FillStackFrames(dap, thread, stack_frames, offset, start_frame,
-                        levels == 0 ? INT64_MAX : levels);
+    bool reached_end_of_stack = FillStackFrames(
+        dap, thread, frame_format, stack_frames, offset, start_frame,
+        levels == 0 ? INT64_MAX : levels, include_all);
     body.try_emplace("totalFrames",
                      start_frame + stack_frames.size() +
                          (reached_end_of_stack ? 0 : StackPageSize));

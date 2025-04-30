@@ -67,8 +67,6 @@ struct SuperClassType;
 using ThreadSafeReflectionContext = LockGuarded<ReflectionContextInterface>;
 
 class SwiftLanguageRuntime : public LanguageRuntime {
-  friend class SwiftRuntimeTypeVisitor;
-
 protected:
   SwiftLanguageRuntime(Process &process);
 

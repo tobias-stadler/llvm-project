@@ -393,7 +393,7 @@ protected:
   /// likely simplifications post-inlining. The most important aspect we track
   /// is CFG altering simplifications -- when we prove a basic block dead, that
   /// can cause dramatic shifts in the cost of inlining a function.
-  DenseMap<Value *, Constant *> SimplifiedValues;
+  DenseMap<Value *, Value *> SimplifiedValues;
 
   /// Keep track of the values which map back (through function arguments) to
   /// allocas on the caller stack which could be simplified through SROA.
@@ -527,11 +527,8 @@ public:
 
   InlineResult analyze();
 
-  std::optional<Constant *> getSimplifiedValue(Instruction *I) {
-    auto It = SimplifiedValues.find(I);
-    if (It != SimplifiedValues.end())
-      return It->second;
-    return std::nullopt;
+  template <typename T> T *getSimplifiedValue(Value *V) const {
+    return dyn_cast_if_present<T>(SimplifiedValues.lookup(V));
   }
 
   // Keep a bunch of stats about the cost savings found so we can print them
@@ -1425,10 +1422,15 @@ void InlineCostAnnotationWriter::emitInstructionAnnot(
     if (Record->hasThresholdChanged())
       OS << ", threshold delta = " << Record->getThresholdDelta();
   }
-  auto C = ICCA->getSimplifiedValue(const_cast<Instruction *>(I));
-  if (C) {
+  auto *V = ICCA->getSimplifiedValue<Value>(const_cast<Instruction *>(I));
+  if (V) {
     OS << ", simplified to ";
-    (*C)->print(OS, true);
+    if (auto *VI = dyn_cast<Instruction>(V)) {
+      if (VI->getFunction() != I->getFunction())
+        OS << "caller ";
+      OS << "instruction ";
+    }
+    V->print(OS, true);
   }
   OS << "\n";
 }
@@ -1485,7 +1487,7 @@ bool CallAnalyzer::isGEPFree(GetElementPtrInst &GEP) {
   SmallVector<Value *, 4> Operands;
   Operands.push_back(GEP.getOperand(0));
   for (const Use &Op : GEP.indices())
-    if (Constant *SimpleOp = SimplifiedValues.lookup(Op))
+    if (Constant *SimpleOp = getSimplifiedValue<Constant>(Op))
       Operands.push_back(SimpleOp);
     else
       Operands.push_back(Op);
@@ -1500,7 +1502,7 @@ bool CallAnalyzer::visitAlloca(AllocaInst &I) {
   // Check whether inlining will turn a dynamic alloca into a static
   // alloca and handle that case.
   if (I.isArrayAllocation()) {
-    Constant *Size = SimplifiedValues.lookup(I.getArraySize());
+    Constant *Size = getSimplifiedValue<Constant>(I.getArraySize());
     if (auto *AllocSize = dyn_cast_or_null<ConstantInt>(Size)) {
       // Sometimes a dynamic alloca could be converted into a static alloca
       // after this constant prop, and become a huge static alloca on an
@@ -1755,19 +1757,87 @@ bool CallAnalyzer::simplifyCmpInstForRecCall(CmpInst &Cmp) {
 
 /// Simplify \p I if its operands are constants and update SimplifiedValues.
 bool CallAnalyzer::simplifyInstruction(Instruction &I) {
-  SmallVector<Constant *> COps;
+  SmallVector<Value *> SimpleOps;
+  bool DoInstSimplify = false;
+  bool DoConstFold = true;
   for (Value *Op : I.operands()) {
-    Constant *COp = getDirectOrSimplifiedValue<Constant>(Op);
-    if (!COp)
-      return false;
-    COps.push_back(COp);
+    Value *SimpleOp = getSimplifiedValue<Value>(Op);
+    if (isa_and_present<Instruction>(SimpleOp)) {
+      DoInstSimplify = true;
+    }
+    if (!SimpleOp) {
+      SimpleOp = Op;
+    }
+    if (!isa<Constant>(SimpleOp)) {
+      DoConstFold = false;
+    }
+    SimpleOps.push_back(SimpleOp);
   }
-  auto *C = ConstantFoldInstOperands(&I, COps, DL);
-  if (!C)
+
+  Value *SimpleV = nullptr;
+  if (DoInstSimplify) {
+    SimplifyQuery SQ(DL);
+    SimpleV = simplifyInstructionWithOperands(&I, SimpleOps, SQ);
+  } else if (DoConstFold) {
+    SmallVector<Constant *> COps(SimpleOps.size());
+    transform(SimpleOps, COps.begin(),
+              [](Value *V) { return cast<Constant>(V); });
+    SimpleV = ConstantFoldInstOperands(&I, COps, DL);
+  }
+
+  if (!SimpleV)
     return false;
-  SimplifiedValues[&I] = C;
+
+  SimplifiedValues[&I] = SimpleV;
   return true;
 }
+
+/*bool CallAnalyzer::simplifyCallerInstruction(Instruction &I) {*/
+/*  SmallVector<Value *> NewOps;*/
+/*  for (Value *Op : I.operands()) {*/
+/*    if (Value *SOp = SimplifiedValues.lookup(Op)) {*/
+/*      NewOps.push_back(SOp);*/
+/*      continue;*/
+/*    }*/
+/*    if (Value *SOp = SimplifiedCallerInsts.lookup(Op)) {*/
+/*      NewOps.push_back(SOp);*/
+/*      continue;*/
+/*    }*/
+/*    NewOps.push_back(Op);*/
+/*  }*/
+/*  SimplifyQuery SQ(DL);*/
+/*  Value *V = simplifyInstructionWithOperands(&I, NewOps, SQ);*/
+/*  if (!V)*/
+/*    return false;*/
+/*  LLVM_DEBUG(llvm::dbgs() << "Simplified caller inst " << I << " to " << *V*/
+/*                          << "\n");*/
+/**/
+/*  if (Constant *C = dyn_cast<Constant>(V))*/
+/*    SimplifiedValues[&I] = C;*/
+/*  if (Instruction *SimpI = dyn_cast<Instruction>(V))*/
+/*    SimplifiedCallerInsts[&I] = SimpI;*/
+/*  return true;*/
+/*}*/
+
+/*Constant* CallAnalyzer::simplifyCallerInstructionRecursively(Instruction &I)
+ * {*/
+/*  LLVM_DEBUG(llvm::dbgs() << "Simplifing CAI recursive: " << I << "\n");*/
+/*  SmallVector<Constant *> COps;*/
+/*  for (Value *Op : I.operands()) {*/
+/*    Constant *COp = dyn_cast<Constant>(Op);*/
+/*    if (!COp) {*/
+/*      Instruction *IOp = dyn_cast<Instruction>(Op);*/
+/*      if (!IOp || isa<PHINode>(IOp))*/
+/*        return nullptr;*/
+/*      COp = simplifyCallerInstructionRecursively(*IOp);*/
+/*    }*/
+/*    if (!COp)*/
+/*      COp = PoisonValue::get(Op->getType());*/
+/*    COps.push_back(COp);*/
+/*  }*/
+/*  auto *C = ConstantFoldInstOperands(&I, COps, DL);*/
+/*  return C;*/
+/*}*/
 
 /// Try to simplify a call to llvm.is.constant.
 ///
@@ -2852,6 +2922,8 @@ InlineResult CallAnalyzer::analyze() {
     assert(CAI != CandidateCall.arg_end());
     if (Constant *C = dyn_cast<Constant>(CAI))
       SimplifiedValues[&FAI] = C;
+    else if (Instruction *I = dyn_cast<Instruction>(CAI))
+      SimplifiedValues[&FAI] = I;
 
     Value *PtrArg = *CAI;
     if (ConstantInt *C = stripAndComputeInBoundsConstantOffsets(PtrArg)) {

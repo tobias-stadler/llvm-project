@@ -1425,12 +1425,14 @@ void InlineCostAnnotationWriter::emitInstructionAnnot(
   auto *V = ICCA->getSimplifiedValue<Value>(const_cast<Instruction *>(I));
   if (V) {
     OS << ", simplified to ";
+    V->print(OS, true);
     if (auto *VI = dyn_cast<Instruction>(V)) {
       if (VI->getFunction() != I->getFunction())
-        OS << "caller ";
-      OS << "instruction ";
+        OS << " (caller instruction)";
+    } else if (auto *VArg = dyn_cast<Argument>(V)) {
+      if (VArg->getParent() != I->getFunction())
+        OS << " (caller argument)";
     }
-    V->print(OS, true);
   }
   OS << "\n";
 }
@@ -1762,12 +1764,10 @@ bool CallAnalyzer::simplifyInstruction(Instruction &I) {
   bool DoConstFold = true;
   for (Value *Op : I.operands()) {
     Value *SimpleOp = getSimplifiedValue<Value>(Op);
-    if (isa_and_present<Instruction>(SimpleOp)) {
+    if (SimpleOp)
       DoInstSimplify = true;
-    }
-    if (!SimpleOp) {
+    if (!SimpleOp)
       SimpleOp = Op;
-    }
     if (!isa<Constant>(SimpleOp)) {
       DoConstFold = false;
     }
@@ -2285,24 +2285,10 @@ bool CallAnalyzer::visitSub(BinaryOperator &I) {
 }
 
 bool CallAnalyzer::visitBinaryOperator(BinaryOperator &I) {
-  Value *LHS = I.getOperand(0), *RHS = I.getOperand(1);
-  Constant *CLHS = getDirectOrSimplifiedValue<Constant>(LHS);
-  Constant *CRHS = getDirectOrSimplifiedValue<Constant>(RHS);
-
-  Value *SimpleV = nullptr;
-  if (auto FI = dyn_cast<FPMathOperator>(&I))
-    SimpleV = simplifyBinOp(I.getOpcode(), CLHS ? CLHS : LHS, CRHS ? CRHS : RHS,
-                            FI->getFastMathFlags(), DL);
-  else
-    SimpleV =
-        simplifyBinOp(I.getOpcode(), CLHS ? CLHS : LHS, CRHS ? CRHS : RHS, DL);
-
-  if (Constant *C = dyn_cast_or_null<Constant>(SimpleV))
-    SimplifiedValues[&I] = C;
-
-  if (SimpleV)
+  if (simplifyInstruction(I))
     return true;
 
+  Value *LHS = I.getOperand(0), *RHS = I.getOperand(1);
   // Disable any SROA on arguments to arbitrary, unsimplified binary operators.
   disableSROA(LHS);
   disableSROA(RHS);
@@ -2320,18 +2306,10 @@ bool CallAnalyzer::visitBinaryOperator(BinaryOperator &I) {
 }
 
 bool CallAnalyzer::visitFNeg(UnaryOperator &I) {
-  Value *Op = I.getOperand(0);
-  Constant *COp = getDirectOrSimplifiedValue<Constant>(Op);
-
-  Value *SimpleV = simplifyFNegInst(
-      COp ? COp : Op, cast<FPMathOperator>(I).getFastMathFlags(), DL);
-
-  if (Constant *C = dyn_cast_or_null<Constant>(SimpleV))
-    SimplifiedValues[&I] = C;
-
-  if (SimpleV)
+  if (simplifyInstruction(I))
     return true;
 
+  Value *Op = I.getOperand(0);
   // Disable any SROA on arguments to arbitrary, unsimplified fneg.
   disableSROA(Op);
 
@@ -2920,10 +2898,7 @@ InlineResult CallAnalyzer::analyze() {
   auto CAI = CandidateCall.arg_begin();
   for (Argument &FAI : F.args()) {
     assert(CAI != CandidateCall.arg_end());
-    if (Constant *C = dyn_cast<Constant>(CAI))
-      SimplifiedValues[&FAI] = C;
-    else if (Instruction *I = dyn_cast<Instruction>(CAI))
-      SimplifiedValues[&FAI] = I;
+    SimplifiedValues[&FAI] = *CAI;
 
     Value *PtrArg = *CAI;
     if (ConstantInt *C = stripAndComputeInBoundsConstantOffsets(PtrArg)) {

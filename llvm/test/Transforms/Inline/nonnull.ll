@@ -102,7 +102,7 @@ define void @caller3(ptr %arg) {
 define void @caller4(ptr dereferenceable(8) %arg) {
 ; CHECK-LABEL: define void @caller4
 ; CHECK-SAME: (ptr dereferenceable(8) [[ARG:%.*]]) {
-; CHECK-NEXT:    call void @callee(ptr dereferenceable(8) [[ARG]])
+; CHECK-NEXT:    call void @bar()
 ; CHECK-NEXT:    ret void
 ;
   call void @callee(ptr dereferenceable(8) %arg)
@@ -112,7 +112,7 @@ define void @caller4(ptr dereferenceable(8) %arg) {
 define void @caller5(ptr dereferenceable(8) %arg) {
 ; CHECK-LABEL: define void @caller5
 ; CHECK-SAME: (ptr dereferenceable(8) [[ARG:%.*]]) {
-; CHECK-NEXT:    call void @callee(ptr [[ARG]])
+; CHECK-NEXT:    call void @bar()
 ; CHECK-NEXT:    ret void
 ;
   call void @callee(ptr %arg)

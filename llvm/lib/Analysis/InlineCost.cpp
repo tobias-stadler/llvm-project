@@ -1792,53 +1792,6 @@ bool CallAnalyzer::simplifyInstruction(Instruction &I) {
   return true;
 }
 
-/*bool CallAnalyzer::simplifyCallerInstruction(Instruction &I) {*/
-/*  SmallVector<Value *> NewOps;*/
-/*  for (Value *Op : I.operands()) {*/
-/*    if (Value *SOp = SimplifiedValues.lookup(Op)) {*/
-/*      NewOps.push_back(SOp);*/
-/*      continue;*/
-/*    }*/
-/*    if (Value *SOp = SimplifiedCallerInsts.lookup(Op)) {*/
-/*      NewOps.push_back(SOp);*/
-/*      continue;*/
-/*    }*/
-/*    NewOps.push_back(Op);*/
-/*  }*/
-/*  SimplifyQuery SQ(DL);*/
-/*  Value *V = simplifyInstructionWithOperands(&I, NewOps, SQ);*/
-/*  if (!V)*/
-/*    return false;*/
-/*  LLVM_DEBUG(llvm::dbgs() << "Simplified caller inst " << I << " to " << *V*/
-/*                          << "\n");*/
-/**/
-/*  if (Constant *C = dyn_cast<Constant>(V))*/
-/*    SimplifiedValues[&I] = C;*/
-/*  if (Instruction *SimpI = dyn_cast<Instruction>(V))*/
-/*    SimplifiedCallerInsts[&I] = SimpI;*/
-/*  return true;*/
-/*}*/
-
-/*Constant* CallAnalyzer::simplifyCallerInstructionRecursively(Instruction &I)
- * {*/
-/*  LLVM_DEBUG(llvm::dbgs() << "Simplifing CAI recursive: " << I << "\n");*/
-/*  SmallVector<Constant *> COps;*/
-/*  for (Value *Op : I.operands()) {*/
-/*    Constant *COp = dyn_cast<Constant>(Op);*/
-/*    if (!COp) {*/
-/*      Instruction *IOp = dyn_cast<Instruction>(Op);*/
-/*      if (!IOp || isa<PHINode>(IOp))*/
-/*        return nullptr;*/
-/*      COp = simplifyCallerInstructionRecursively(*IOp);*/
-/*    }*/
-/*    if (!COp)*/
-/*      COp = PoisonValue::get(Op->getType());*/
-/*    COps.push_back(COp);*/
-/*  }*/
-/*  auto *C = ConstantFoldInstOperands(&I, COps, DL);*/
-/*  return C;*/
-/*}*/
-
 /// Try to simplify a call to llvm.is.constant.
 ///
 /// Duplicate the argument checking from CallAnalyzer::simplifyCallSite since
@@ -2913,6 +2866,7 @@ InlineResult CallAnalyzer::analyze() {
     }
     ++CAI;
   }
+  // FIXME: Wrong value
   NumConstantArgs = SimplifiedValues.size();
   NumConstantOffsetPtrArgs = ConstantOffsetPtrs.size();
   NumAllocaArgs = SROAArgValues.size();

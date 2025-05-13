@@ -479,6 +479,9 @@ static Value *threadBinOpOverPHI(Instruction::BinaryOps Opcode, Value *LHS,
   if (!MaxRecurse--)
     return nullptr;
 
+  if(!Q.CxtI)
+    return nullptr;
+
   PHINode *PI;
   if (isa<PHINode>(LHS)) {
     PI = cast<PHINode>(LHS);
@@ -523,6 +526,9 @@ static Value *threadCmpOverPHI(CmpPredicate Pred, Value *LHS, Value *RHS,
                                const SimplifyQuery &Q, unsigned MaxRecurse) {
   // Recursion is always used, so bail out at once if we already hit the limit.
   if (!MaxRecurse--)
+    return nullptr;
+
+  if(!Q.CxtI)
     return nullptr;
 
   // Make sure the phi is on the LHS.
@@ -7088,13 +7094,11 @@ Value *llvm::simplifyLoadInst(LoadInst *LI, Value *PtrOp,
 
 static Value *simplifyInstructionWithOperands(Instruction *I,
                                               ArrayRef<Value *> NewOps,
-                                              const SimplifyQuery &SQ,
+                                              const SimplifyQuery &Q,
                                               unsigned MaxRecurse) {
   assert(I->getFunction() && "instruction should be inserted in a function");
-  assert((!SQ.CxtI || SQ.CxtI->getFunction() == I->getFunction()) &&
+  assert((!Q.CxtI || Q.CxtI->getFunction() == I->getFunction()) &&
          "context instruction should be in the same function");
-
-  const SimplifyQuery Q = SQ.CxtI ? SQ : SQ.getWithInstruction(I);
 
   switch (I->getOpcode()) {
   default:
@@ -7228,8 +7232,9 @@ Value *llvm::simplifyInstructionWithOperands(Instruction *I,
 }
 
 Value *llvm::simplifyInstruction(Instruction *I, const SimplifyQuery &SQ) {
+  const SimplifyQuery Q = SQ.CxtI ? SQ : SQ.getWithInstruction(I);
   SmallVector<Value *, 8> Ops(I->operands());
-  Value *Result = ::simplifyInstructionWithOperands(I, Ops, SQ, RecursionLimit);
+  Value *Result = ::simplifyInstructionWithOperands(I, Ops, Q, RecursionLimit);
 
   /// If called on unreachable code, the instruction may simplify to itself.
   /// Make life easier for users by detecting that case here, and returning a

@@ -62,6 +62,7 @@
 #include "llvm/Transforms/IPO/IROutliner.h"
 #include "llvm/Transforms/IPO/InferFunctionAttrs.h"
 #include "llvm/Transforms/IPO/Inliner.h"
+#include "llvm/Transforms/IPO/LoopRemarkExtractor.h"
 #include "llvm/Transforms/IPO/LowerTypeTests.h"
 #include "llvm/Transforms/IPO/MemProfContextDisambiguation.h"
 #include "llvm/Transforms/IPO/MergeFunctions.h"
@@ -1294,6 +1295,7 @@ PassBuilder::buildModuleSimplificationPipeline(OptimizationLevel Level,
   // Optimize globals now that functions are fully simplified.
   MPM.addPass(GlobalOptPass());
   MPM.addPass(GlobalDCEPass());
+  MPM.addPass(LoopRemarkExtractorPass());
 
   return MPM;
 }

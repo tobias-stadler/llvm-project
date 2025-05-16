@@ -53,10 +53,6 @@ llvm::remarks::createRemarkParser(Format ParserFormat, StringRef Buf) {
   switch (ParserFormat) {
   case Format::YAML:
     return std::make_unique<YAMLRemarkParser>(Buf);
-  case Format::YAMLStrTab:
-    return createStringError(
-        std::make_error_code(std::errc::invalid_argument),
-        "The YAML with string table format requires a parsed string table.");
   case Format::Bitstream:
     return std::make_unique<BitstreamRemarkParser>(Buf);
   case Format::Unknown:
@@ -73,9 +69,7 @@ llvm::remarks::createRemarkParser(Format ParserFormat, StringRef Buf,
   case Format::YAML:
     return createStringError(std::make_error_code(std::errc::invalid_argument),
                              "The YAML format can't be used with a string "
-                             "table. Use yaml-strtab instead.");
-  case Format::YAMLStrTab:
-    return std::make_unique<YAMLStrTabRemarkParser>(Buf, std::move(StrTab));
+                             "table.");
   case Format::Bitstream:
     return std::make_unique<BitstreamRemarkParser>(Buf, std::move(StrTab));
   case Format::Unknown:
@@ -90,12 +84,8 @@ llvm::remarks::createRemarkParserFromMeta(
     Format ParserFormat, StringRef Buf, std::optional<ParsedStringTable> StrTab,
     std::optional<StringRef> ExternalFilePrependPath) {
   switch (ParserFormat) {
-  // Depending on the metadata, the format can be either yaml or yaml-strtab,
-  // regardless of the input argument.
   case Format::YAML:
-  case Format::YAMLStrTab:
-    return createYAMLParserFromMeta(Buf, std::move(StrTab),
-                                    std::move(ExternalFilePrependPath));
+    return createYAMLParserFromMeta(Buf, std::move(ExternalFilePrependPath));
   case Format::Bitstream:
     return createBitstreamParserFromMeta(Buf, std::move(StrTab),
                                          std::move(ExternalFilePrependPath));

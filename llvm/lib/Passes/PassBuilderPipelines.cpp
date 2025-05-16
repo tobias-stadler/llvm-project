@@ -62,6 +62,7 @@
 #include "llvm/Transforms/IPO/IROutliner.h"
 #include "llvm/Transforms/IPO/InferFunctionAttrs.h"
 #include "llvm/Transforms/IPO/Inliner.h"
+#include "llvm/Transforms/IPO/LoopRemarkExtractor.h"
 #include "llvm/Transforms/IPO/LowerTypeTests.h"
 #include "llvm/Transforms/IPO/MemProfContextDisambiguation.h"
 #include "llvm/Transforms/IPO/MergeFunctions.h"
@@ -1301,6 +1302,7 @@ PassBuilder::buildModuleSimplificationPipeline(OptimizationLevel Level,
 /// TODO: Should LTO cause any differences to this set of passes?
 void PassBuilder::addVectorPasses(OptimizationLevel Level,
                                   FunctionPassManager &FPM, bool IsFullLTO) {
+  //FPM.addPass(LoopRemarkExtractorPass());
   FPM.addPass(LoopVectorizePass(
       LoopVectorizeOptions(!PTO.LoopInterleaving, !PTO.LoopVectorization)));
 
@@ -1670,6 +1672,7 @@ PassBuilder::buildPerModuleDefaultPipeline(OptimizationLevel Level,
   // Add the core simplification pipeline.
   MPM.addPass(buildModuleSimplificationPipeline(Level, Phase));
 
+  MPM.addPass(createModuleToFunctionPassAdaptor(LoopRemarkExtractorPass()));
   // Now add the optimization pipeline.
   MPM.addPass(buildModuleOptimizationPipeline(Level, Phase));
 

@@ -146,9 +146,9 @@ void BitstreamRemarkSerializerHelper::setupRemarkBlockInfo() {
 
     auto Abbrev = std::make_shared<BitCodeAbbrev>();
     Abbrev->Add(BitCodeAbbrevOp(RECORD_REMARK_DEBUG_LOC));
-    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7));    // File
-    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // Line
-    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // Column
+    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // File
+    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // Line
+    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // Column
     RecordRemarkDebugLocAbbrevID =
         Bitstream.EmitBlockInfoAbbrev(REMARK_BLOCK_ID, Abbrev);
   }
@@ -171,11 +171,11 @@ void BitstreamRemarkSerializerHelper::setupRemarkBlockInfo() {
 
     auto Abbrev = std::make_shared<BitCodeAbbrev>();
     Abbrev->Add(BitCodeAbbrevOp(RECORD_REMARK_ARG_WITH_DEBUGLOC));
-    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7));    // Key
-    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7));    // Value
-    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7));    // File
-    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // Line
-    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // Column
+    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // Key
+    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // Value
+    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // File
+    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // Line
+    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // Column
     RecordRemarkArgWithDebugLocAbbrevID =
         Bitstream.EmitBlockInfoAbbrev(REMARK_BLOCK_ID, Abbrev);
   }

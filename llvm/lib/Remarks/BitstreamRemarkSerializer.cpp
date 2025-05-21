@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Remarks/BitstreamRemarkSerializer.h"
+#include "llvm/Remarks/BitstreamRemarkContainer.h"
 #include "llvm/Remarks/Remark.h"
 #include <optional>
 
@@ -22,15 +23,11 @@ BitstreamRemarkSerializerHelper::BitstreamRemarkSerializerHelper(
     BitstreamRemarkContainerType ContainerType)
     : Bitstream(Encoded), ContainerType(ContainerType) {}
 
-static void push(SmallVectorImpl<uint64_t> &R, StringRef Str) {
-  append_range(R, Str);
-}
-
 static void setRecordName(unsigned RecordID, BitstreamWriter &Bitstream,
                           SmallVectorImpl<uint64_t> &R, StringRef Str) {
   R.clear();
   R.push_back(RecordID);
-  push(R, Str);
+  append_range(R, Str);
   Bitstream.EmitRecord(bitc::BLOCKINFO_CODE_SETRECORDNAME, R);
 }
 
@@ -41,7 +38,7 @@ static void initBlock(unsigned BlockID, BitstreamWriter &Bitstream,
   Bitstream.EmitRecord(bitc::BLOCKINFO_CODE_SETBID, R);
 
   R.clear();
-  push(R, Str);
+  append_range(R, Str);
   Bitstream.EmitRecord(bitc::BLOCKINFO_CODE_BLOCKNAME, R);
 }
 
@@ -166,30 +163,49 @@ void BitstreamRemarkSerializerHelper::setupRemarkBlockInfo() {
 
   // An argument entry with a debug location attached.
   {
-    setRecordName(RECORD_REMARK_ARG_WITH_DEBUGLOC, Bitstream, R,
+    setRecordName(RECORD_REMARK_ARG_KV_WITH_DEBUGLOC, Bitstream, R,
                   RemarkArgWithDebugLocName);
 
     auto Abbrev = std::make_shared<BitCodeAbbrev>();
-    Abbrev->Add(BitCodeAbbrevOp(RECORD_REMARK_ARG_WITH_DEBUGLOC));
+    Abbrev->Add(BitCodeAbbrevOp(RECORD_REMARK_ARG_KV_WITH_DEBUGLOC));
     Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // Key
     Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // Value
     Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // File
     Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // Line
     Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // Column
-    RecordRemarkArgWithDebugLocAbbrevID =
+    RecordRemarkArgKVWithDebugLocAbbrevID =
         Bitstream.EmitBlockInfoAbbrev(REMARK_BLOCK_ID, Abbrev);
   }
 
   // An argument entry with no debug location attached.
   {
-    setRecordName(RECORD_REMARK_ARG_WITHOUT_DEBUGLOC, Bitstream, R,
-                  RemarkArgWithoutDebugLocName);
+    setRecordName(RECORD_REMARK_ARG_KV, Bitstream, R, RemarkArgKVName);
 
     auto Abbrev = std::make_shared<BitCodeAbbrev>();
-    Abbrev->Add(BitCodeAbbrevOp(RECORD_REMARK_ARG_WITHOUT_DEBUGLOC));
+    Abbrev->Add(BitCodeAbbrevOp(RECORD_REMARK_ARG_KV));
     Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // Key
     Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // Value
-    RecordRemarkArgWithoutDebugLocAbbrevID =
+    RecordRemarkArgKVAbbrevID =
+        Bitstream.EmitBlockInfoAbbrev(REMARK_BLOCK_ID, Abbrev);
+  }
+
+  {
+    setRecordName(RECORD_REMARK_ARG_V, Bitstream, R, RemarkArgVName);
+
+    auto Abbrev = std::make_shared<BitCodeAbbrev>();
+    Abbrev->Add(BitCodeAbbrevOp(RECORD_REMARK_ARG_V));
+    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // Value
+    RecordRemarkArgVAbbrevID =
+        Bitstream.EmitBlockInfoAbbrev(REMARK_BLOCK_ID, Abbrev);
+  }
+  {
+    setRecordName(RECORD_REMARK_ARG_KV_INT, Bitstream, R, RemarkArgKVIntName);
+
+    auto Abbrev = std::make_shared<BitCodeAbbrev>();
+    Abbrev->Add(BitCodeAbbrevOp(RECORD_REMARK_ARG_KV_INT));
+    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // Key
+    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // Value
+    RecordRemarkArgKVIntAbbrevID =
         Bitstream.EmitBlockInfoAbbrev(REMARK_BLOCK_ID, Abbrev);
   }
 }
@@ -297,22 +313,49 @@ void BitstreamRemarkSerializerHelper::emitRemarkBlock(const Remark &Remark,
 
   for (const Argument &Arg : Remark.Args) {
     R.clear();
-    unsigned Key = StrTab.add(Arg.Key).first;
-    unsigned Val = StrTab.add(Arg.Val).first;
-    bool HasDebugLoc = Arg.Loc != std::nullopt;
-    R.push_back(HasDebugLoc ? RECORD_REMARK_ARG_WITH_DEBUGLOC
-                            : RECORD_REMARK_ARG_WITHOUT_DEBUGLOC);
-    R.push_back(Key);
-    R.push_back(Val);
-    if (HasDebugLoc) {
+    auto MaybeIntVal = Arg.getValAsInt();
+
+    unsigned Opc = RECORD_REMARK_ARG_KV;
+    if (Arg.Loc != std::nullopt) {
+      Opc = RECORD_REMARK_ARG_KV_WITH_DEBUGLOC;
+    } else if (Arg.Key == "String") {
+      Opc = RECORD_REMARK_ARG_V;
+    } else if (MaybeIntVal) {
+      Opc = RECORD_REMARK_ARG_KV_INT;
+    }
+    R.push_back(Opc);
+
+    if (Opc != RECORD_REMARK_ARG_V) {
+      R.push_back(StrTab.add(Arg.Key).first);
+    }
+    if (Opc == RECORD_REMARK_ARG_KV_INT) {
+      R.push_back(*MaybeIntVal);
+    } else {
+      R.push_back(StrTab.add(Arg.Val).first);
+    }
+    if (Opc == RECORD_REMARK_ARG_KV_WITH_DEBUGLOC) {
       R.push_back(StrTab.add(Arg.Loc->SourceFilePath).first);
       R.push_back(Arg.Loc->SourceLine);
       R.push_back(Arg.Loc->SourceColumn);
     }
-    Bitstream.EmitRecordWithAbbrev(HasDebugLoc
-                                       ? RecordRemarkArgWithDebugLocAbbrevID
-                                       : RecordRemarkArgWithoutDebugLocAbbrevID,
-                                   R);
+    unsigned Abbrev;
+    switch (Opc) {
+    case RECORD_REMARK_ARG_KV_WITH_DEBUGLOC:
+      Abbrev = RecordRemarkArgKVWithDebugLocAbbrevID;
+      break;
+    case RECORD_REMARK_ARG_KV:
+      Abbrev = RecordRemarkArgKVAbbrevID;
+      break;
+    case RECORD_REMARK_ARG_KV_INT:
+      Abbrev = RecordRemarkArgKVIntAbbrevID;
+      break;
+    case RECORD_REMARK_ARG_V:
+      Abbrev = RecordRemarkArgVAbbrevID;
+      break;
+    default:
+      llvm_unreachable("Illegal arg opc");
+    }
+    Bitstream.EmitRecordWithAbbrev(Abbrev, R);
   }
   Bitstream.ExitBlock();
 }

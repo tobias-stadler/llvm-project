@@ -120,7 +120,7 @@ static Error parseRecord(BitstreamRemarkParserHelper &Parser, unsigned Code) {
     Parser.Hotness = Record[0];
     break;
   }
-  case RECORD_REMARK_ARG_WITH_DEBUGLOC: {
+  case RECORD_REMARK_ARG_KV_WITH_DEBUGLOC: {
     if (Record.size() != 5)
       return malformedRecord("BLOCK_REMARK", "RECORD_REMARK_ARG_WITH_DEBUGLOC");
     // Create a temporary argument. Use that as a valid memory location for this
@@ -135,7 +135,7 @@ static Error parseRecord(BitstreamRemarkParserHelper &Parser, unsigned Code) {
         ArrayRef<BitstreamRemarkParserHelper::Argument>(Parser.TmpArgs);
     break;
   }
-  case RECORD_REMARK_ARG_WITHOUT_DEBUGLOC: {
+  case RECORD_REMARK_ARG_KV: {
     if (Record.size() != 2)
       return malformedRecord("BLOCK_REMARK",
                              "RECORD_REMARK_ARG_WITHOUT_DEBUGLOC");

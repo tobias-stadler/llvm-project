@@ -67,8 +67,8 @@ enum BlockIDs {
   REMARK_BLOCK_ID
 };
 
-constexpr StringRef MetaBlockName = StringRef("Meta", 4);
-constexpr StringRef RemarkBlockName = StringRef("Remark", 6);
+constexpr StringLiteral MetaBlockName("Meta");
+constexpr StringLiteral RemarkBlockName("Remark");
 
 /// The possible records that can be encountered in the previously described
 /// blocks.
@@ -82,23 +82,27 @@ enum RecordIDs {
   RECORD_REMARK_HEADER,
   RECORD_REMARK_DEBUG_LOC,
   RECORD_REMARK_HOTNESS,
-  RECORD_REMARK_ARG_WITH_DEBUGLOC,
-  RECORD_REMARK_ARG_WITHOUT_DEBUGLOC,
+  RECORD_REMARK_ARG_KV_WITH_DEBUGLOC,
+  RECORD_REMARK_ARG_V,
+  RECORD_REMARK_ARG_KV_INT,
+  RECORD_REMARK_ARG_KV,
   // Helpers.
   RECORD_FIRST = RECORD_META_CONTAINER_INFO,
-  RECORD_LAST = RECORD_REMARK_ARG_WITHOUT_DEBUGLOC
+  RECORD_LAST = RECORD_REMARK_ARG_KV
 };
 
-constexpr StringRef MetaContainerInfoName = StringRef("Container info", 14);
-constexpr StringRef MetaRemarkVersionName = StringRef("Remark version", 14);
-constexpr StringRef MetaStrTabName = StringRef("String table", 12);
-constexpr StringRef MetaExternalFileName = StringRef("External File", 13);
-constexpr StringRef RemarkHeaderName = StringRef("Remark header", 13);
-constexpr StringRef RemarkDebugLocName = StringRef("Remark debug location", 21);
-constexpr StringRef RemarkHotnessName = StringRef("Remark hotness", 14);
-constexpr StringRef RemarkArgWithDebugLocName =
-    StringRef("Argument with debug location", 28);
-constexpr StringRef RemarkArgWithoutDebugLocName = StringRef("Argument", 8);
+constexpr StringLiteral MetaContainerInfoName("Container info");
+constexpr StringLiteral MetaRemarkVersionName("Remark version");
+constexpr StringLiteral MetaStrTabName("String table");
+constexpr StringLiteral MetaExternalFileName("External File");
+constexpr StringLiteral RemarkHeaderName("Remark header");
+constexpr StringLiteral RemarkDebugLocName("Remark debug location");
+constexpr StringLiteral RemarkHotnessName("Remark hotness");
+constexpr StringLiteral
+    RemarkArgWithDebugLocName("Argument with debug location");
+constexpr StringLiteral RemarkArgKVName("Argument KV");
+constexpr StringLiteral RemarkArgVName("Argument V");
+constexpr StringLiteral RemarkArgKVIntName("Argument KV int");
 
 } // end namespace remarks
 } // end namespace llvm

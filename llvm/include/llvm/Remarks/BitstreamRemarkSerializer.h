@@ -70,8 +70,10 @@ struct BitstreamRemarkSerializerHelper {
   uint64_t RecordRemarkHeaderAbbrevID = 0;
   uint64_t RecordRemarkDebugLocAbbrevID = 0;
   uint64_t RecordRemarkHotnessAbbrevID = 0;
-  uint64_t RecordRemarkArgWithDebugLocAbbrevID = 0;
-  uint64_t RecordRemarkArgWithoutDebugLocAbbrevID = 0;
+  uint64_t RecordRemarkArgKVWithDebugLocAbbrevID = 0;
+  uint64_t RecordRemarkArgKVAbbrevID = 0;
+  uint64_t RecordRemarkArgKVIntAbbrevID = 0;
+  uint64_t RecordRemarkArgVAbbrevID = 0;
 
   BitstreamRemarkSerializerHelper(BitstreamRemarkContainerType ContainerType);
 

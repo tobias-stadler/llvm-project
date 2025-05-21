@@ -2005,10 +2005,9 @@ void AsmPrinter::emitFunctionBody() {
           return StringRef(A.first) < StringRef(B.first);
         return false;
       });
-      R << "BasicBlock: " << ore::NV("BasicBlock", MBB.getName()) << "\n";
+      //R << ore::NV("BasicBlock", MBB.getName());
       for (auto &KV : MnemonicVec) {
-        auto Name = (Twine("INST_") + getToken(KV.first.trim()).first).str();
-        R << KV.first << ": " << ore::NV(Name, KV.second) << "\n";
+        R << ore::NV(KV.first.trim(), KV.second);
       }
       ORE->emit(R);
     }

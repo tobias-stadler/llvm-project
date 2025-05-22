@@ -294,6 +294,10 @@ void BitstreamRemarkSerializerHelper::emitLateMetaBlock(
 
 void BitstreamRemarkSerializerHelper::emitRemarkBlock(const Remark &Remark,
                                                       StringTable &StrTab) {
+  if ((Bitstream.GetCurrentBlockBitNo() / 8) > 1024) {
+    exitRemarksBlock();
+    enterRemarksBlock();
+  }
   R.clear();
   R.push_back(RECORD_REMARK);
   Bitstream.EmitRecordWithAbbrev(RecordRemarkAbbrevID, R);

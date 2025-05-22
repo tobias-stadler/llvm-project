@@ -19,8 +19,6 @@
 using namespace llvm;
 using namespace llvm::remarks;
 
-// Use the same keys whether we use a string table or not (respectively, T is an
-// unsigned or a StringRef).
 static void
 mapRemarkHeader(yaml::IO &io, StringRef PassName, StringRef RemarkName,
                 std::optional<RemarkLocation> RL, StringRef FunctionName,
@@ -131,22 +129,14 @@ template <> struct MappingTraits<Argument> {
 
 LLVM_YAML_IS_SEQUENCE_VECTOR(Argument)
 
-YAMLRemarkSerializer::YAMLRemarkSerializer(raw_ostream &OS, SerializerMode Mode,
-                                           std::optional<StringTable> StrTabIn)
-    : YAMLRemarkSerializer(Format::YAML, OS, Mode, std::move(StrTabIn)) {}
-
-YAMLRemarkSerializer::YAMLRemarkSerializer(Format SerializerFormat,
-                                           raw_ostream &OS, SerializerMode Mode,
-                                           std::optional<StringTable> StrTabIn)
-    : RemarkSerializer(SerializerFormat, OS, Mode),
-      YAMLOutput(OS, reinterpret_cast<void *>(this)) {
-  StrTab = std::move(StrTabIn);
-}
+YAMLRemarkSerializer::YAMLRemarkSerializer(raw_ostream &OS)
+    : RemarkSerializer(Format::YAML, OS),
+      YAMLOutput(OS, reinterpret_cast<void *>(this)) {}
 
 void YAMLRemarkSerializer::emit(const Remark &Remark) {
   // Again, YAMLTraits expect a non-const object for inputting, but we're not
   // using that here.
-  auto R = const_cast<remarks::Remark *>(&Remark);
+  auto* R = const_cast<remarks::Remark *>(&Remark);
   YAMLOutput << R;
 }
 

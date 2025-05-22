@@ -56,17 +56,5 @@ bool RemarkStreamer::needsSection() const {
     return false;
 
   assert(EnableRemarksSection == cl::BOU_UNSET);
-
-  // We only need a section if we're in separate mode.
-  if (RemarkSerializer->Mode != remarks::SerializerMode::Separate)
-    return false;
-
-  // Only some formats need a section:
-  // * bitstream
-  switch (RemarkSerializer->SerializerFormat) {
-  case remarks::Format::Bitstream:
-    return true;
-  default:
-    return false;
-  }
+  return RemarkSerializer->SerializerFormat == Format::Bitstream;
 }

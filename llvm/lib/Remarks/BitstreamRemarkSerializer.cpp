@@ -21,8 +21,8 @@ using namespace llvm;
 using namespace llvm::remarks;
 
 BitstreamRemarkSerializerHelper::BitstreamRemarkSerializerHelper(
-    BitstreamRemarkContainerType ContainerType)
-    : Bitstream(Encoded), ContainerType(ContainerType) {}
+    BitstreamRemarkContainerType ContainerType, raw_ostream &OS)
+    : Bitstream(OS), ContainerType(ContainerType) {}
 
 static void setRecordName(unsigned RecordID, BitstreamWriter &Bitstream,
                           SmallVectorImpl<uint64_t> &R, StringRef Str) {
@@ -122,7 +122,16 @@ void BitstreamRemarkSerializerHelper::emitMetaExternalFile(StringRef Filename) {
 
 void BitstreamRemarkSerializerHelper::setupRemarkBlockInfo() {
   // Setup the remark block.
-  initBlock(REMARK_BLOCK_ID, Bitstream, R, RemarkBlockName);
+  initBlock(REMARKS_BLOCK_ID, Bitstream, R, RemarksBlockName);
+
+  {
+    setRecordName(RECORD_REMARK, Bitstream, R, RemarkName);
+
+    auto Abbrev = std::make_shared<BitCodeAbbrev>();
+    Abbrev->Add(BitCodeAbbrevOp(RECORD_REMARK));
+    RecordRemarkAbbrevID =
+        Bitstream.EmitBlockInfoAbbrev(REMARKS_BLOCK_ID, Abbrev);
+  }
 
   // The header of a remark.
   {
@@ -135,7 +144,7 @@ void BitstreamRemarkSerializerHelper::setupRemarkBlockInfo() {
     Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6));   // Pass name
     Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 8));   // Function name
     RecordRemarkHeaderAbbrevID =
-        Bitstream.EmitBlockInfoAbbrev(REMARK_BLOCK_ID, Abbrev);
+        Bitstream.EmitBlockInfoAbbrev(REMARKS_BLOCK_ID, Abbrev);
   }
 
   // The location of a remark.
@@ -148,7 +157,7 @@ void BitstreamRemarkSerializerHelper::setupRemarkBlockInfo() {
     Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // Line
     Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // Column
     RecordRemarkDebugLocAbbrevID =
-        Bitstream.EmitBlockInfoAbbrev(REMARK_BLOCK_ID, Abbrev);
+        Bitstream.EmitBlockInfoAbbrev(REMARKS_BLOCK_ID, Abbrev);
   }
 
   // The hotness of a remark.
@@ -159,7 +168,7 @@ void BitstreamRemarkSerializerHelper::setupRemarkBlockInfo() {
     Abbrev->Add(BitCodeAbbrevOp(RECORD_REMARK_HOTNESS));
     Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 8)); // Hotness
     RecordRemarkHotnessAbbrevID =
-        Bitstream.EmitBlockInfoAbbrev(REMARK_BLOCK_ID, Abbrev);
+        Bitstream.EmitBlockInfoAbbrev(REMARKS_BLOCK_ID, Abbrev);
   }
 
   // An argument entry with a debug location attached.
@@ -175,7 +184,7 @@ void BitstreamRemarkSerializerHelper::setupRemarkBlockInfo() {
     Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // Line
     Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // Column
     RecordRemarkArgKVWithDebugLocAbbrevID =
-        Bitstream.EmitBlockInfoAbbrev(REMARK_BLOCK_ID, Abbrev);
+        Bitstream.EmitBlockInfoAbbrev(REMARKS_BLOCK_ID, Abbrev);
   }
 
   // An argument entry with no debug location attached.
@@ -187,7 +196,7 @@ void BitstreamRemarkSerializerHelper::setupRemarkBlockInfo() {
     Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // Key
     Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // Value
     RecordRemarkArgKVAbbrevID =
-        Bitstream.EmitBlockInfoAbbrev(REMARK_BLOCK_ID, Abbrev);
+        Bitstream.EmitBlockInfoAbbrev(REMARKS_BLOCK_ID, Abbrev);
   }
 
   {
@@ -197,7 +206,7 @@ void BitstreamRemarkSerializerHelper::setupRemarkBlockInfo() {
     Abbrev->Add(BitCodeAbbrevOp(RECORD_REMARK_ARG_V));
     Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // Value
     RecordRemarkArgVAbbrevID =
-        Bitstream.EmitBlockInfoAbbrev(REMARK_BLOCK_ID, Abbrev);
+        Bitstream.EmitBlockInfoAbbrev(REMARKS_BLOCK_ID, Abbrev);
   }
   {
     setRecordName(RECORD_REMARK_ARG_KV_INT, Bitstream, R, RemarkArgKVIntName);
@@ -207,7 +216,7 @@ void BitstreamRemarkSerializerHelper::setupRemarkBlockInfo() {
     Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // Key
     Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // Value
     RecordRemarkArgKVIntAbbrevID =
-        Bitstream.EmitBlockInfoAbbrev(REMARK_BLOCK_ID, Abbrev);
+        Bitstream.EmitBlockInfoAbbrev(REMARKS_BLOCK_ID, Abbrev);
   }
 }
 
@@ -267,6 +276,14 @@ void BitstreamRemarkSerializerHelper::emitMetaBlock(
   Bitstream.ExitBlock();
 }
 
+void BitstreamRemarkSerializerHelper::enterRemarksBlock() {
+  Bitstream.EnterSubblock(REMARKS_BLOCK_ID, 4);
+}
+
+void BitstreamRemarkSerializerHelper::exitRemarksBlock() {
+  Bitstream.ExitBlock();
+}
+
 void BitstreamRemarkSerializerHelper::emitLateMetaBlock(
     const StringTable &StrTab) {
   // Emit the late meta block (after all remarks are serialized)
@@ -277,7 +294,9 @@ void BitstreamRemarkSerializerHelper::emitLateMetaBlock(
 
 void BitstreamRemarkSerializerHelper::emitRemarkBlock(const Remark &Remark,
                                                       StringTable &StrTab) {
-  Bitstream.EnterSubblock(REMARK_BLOCK_ID, 4);
+  R.clear();
+  R.push_back(RECORD_REMARK);
+  Bitstream.EmitRecordWithAbbrev(RecordRemarkAbbrevID, R);
 
   R.clear();
   R.push_back(RECORD_REMARK_HEADER);
@@ -349,21 +368,10 @@ void BitstreamRemarkSerializerHelper::emitRemarkBlock(const Remark &Remark,
     }
     Bitstream.EmitRecordWithAbbrev(Abbrev, R);
   }
-  Bitstream.ExitBlock();
-}
-
-void BitstreamRemarkSerializerHelper::flushToStream(raw_ostream &OS) {
-  OS.write(Encoded.data(), Encoded.size());
-  Encoded.clear();
-}
-
-StringRef BitstreamRemarkSerializerHelper::getBuffer() {
-  return StringRef(Encoded.data(), Encoded.size());
 }
 
 BitstreamRemarkSerializer::BitstreamRemarkSerializer(raw_ostream &OS)
-    : RemarkSerializer(Format::Bitstream, OS),
-      Helper(BitstreamRemarkContainerType::RemarksFile) {}
+    : RemarkSerializer(Format::Bitstream, OS) {}
 
 BitstreamRemarkSerializer::BitstreamRemarkSerializer(raw_ostream &OS,
                                                      StringTable StrTab)
@@ -374,28 +382,25 @@ BitstreamRemarkSerializer::BitstreamRemarkSerializer(raw_ostream &OS,
 BitstreamRemarkSerializer::~BitstreamRemarkSerializer() { finalize(); }
 
 void BitstreamRemarkSerializer::setup() {
-  assert(!DidFinalize);
-  if (DidSetUp)
+  if (Helper)
     return;
-  Helper.setupBlockInfo();
-  Helper.emitMetaBlock(CurrentContainerVersion, CurrentRemarkVersion);
-  Helper.flushToStream(OS);
-  DidSetUp = true;
+  Helper.emplace(BitstreamRemarkContainerType::RemarksFile, OS);
+  Helper->setupBlockInfo();
+  Helper->emitMetaBlock(CurrentContainerVersion, CurrentRemarkVersion);
+  Helper->enterRemarksBlock();
 }
 
 void BitstreamRemarkSerializer::finalize() {
-  assert(DidSetUp);
-  if (DidFinalize)
+  if (!Helper)
     return;
-  Helper.emitLateMetaBlock(StrTab);
-  Helper.flushToStream(OS);
-  DidFinalize = true;
+  Helper->exitRemarksBlock();
+  Helper->emitLateMetaBlock(StrTab);
+  Helper = std::nullopt;
 }
 
 void BitstreamRemarkSerializer::emit(const Remark &Remark) {
   setup();
-  Helper.emitRemarkBlock(Remark, StrTab);
-  Helper.flushToStream(OS);
+  Helper->emitRemarkBlock(Remark, StrTab);
 }
 
 std::unique_ptr<MetaSerializer> BitstreamRemarkSerializer::metaSerializer(
@@ -405,8 +410,7 @@ std::unique_ptr<MetaSerializer> BitstreamRemarkSerializer::metaSerializer(
 }
 
 void BitstreamMetaSerializer::emit() {
-  Helper->setupBlockInfo();
-  Helper->emitMetaBlock(CurrentContainerVersion, CurrentRemarkVersion,
-                        ExternalFilename);
-  Helper->flushToStream(OS);
+  Helper.setupBlockInfo();
+  Helper.emitMetaBlock(CurrentContainerVersion, CurrentRemarkVersion,
+                       ExternalFilename);
 }

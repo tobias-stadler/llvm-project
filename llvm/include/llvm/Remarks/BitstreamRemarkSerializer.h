@@ -28,9 +28,6 @@ struct Remarks;
 /// This class provides ways to emit remarks in the LLVM bitstream format and
 /// its associated metadata.
 struct BitstreamRemarkSerializerHelper {
-  /// Buffer used for encoding the bitstream before writing it to the final
-  /// stream.
-  SmallVector<char, 1024> Encoded;
   /// Buffer used to construct records and pass to the bitstream writer.
   SmallVector<uint64_t, 64> R;
   /// The Bitstream writer.
@@ -46,6 +43,7 @@ struct BitstreamRemarkSerializerHelper {
   uint64_t RecordMetaRemarkVersionAbbrevID = 0;
   uint64_t RecordMetaStrTabAbbrevID = 0;
   uint64_t RecordMetaExternalFileAbbrevID = 0;
+  uint64_t RecordRemarkAbbrevID = 0;
   uint64_t RecordRemarkHeaderAbbrevID = 0;
   uint64_t RecordRemarkDebugLocAbbrevID = 0;
   uint64_t RecordRemarkHotnessAbbrevID = 0;
@@ -54,7 +52,8 @@ struct BitstreamRemarkSerializerHelper {
   uint64_t RecordRemarkArgKVIntAbbrevID = 0;
   uint64_t RecordRemarkArgVAbbrevID = 0;
 
-  BitstreamRemarkSerializerHelper(BitstreamRemarkContainerType ContainerType);
+  BitstreamRemarkSerializerHelper(BitstreamRemarkContainerType ContainerType,
+                                  raw_ostream &OS);
 
   // Disable copy and move: Bitstream points to Encoded, which needs special
   // handling during copy/move, but moving the vectors is probably useless
@@ -92,14 +91,11 @@ struct BitstreamRemarkSerializerHelper {
 
   void emitLateMetaBlock(const StringTable &StrTab);
 
+  void enterRemarksBlock();
+  void exitRemarksBlock();
+
   /// Emit a remark block. The string table is required.
   void emitRemarkBlock(const Remark &Remark, StringTable &StrTab);
-  /// Finalize the writing to \p OS.
-  void flushToStream(raw_ostream &OS);
-  /// Finalize the writing to a buffer.
-  /// The contents of the buffer remain valid for the lifetime of the object.
-  /// Any call to any other function in this class will invalidate the buffer.
-  StringRef getBuffer();
 };
 
 /// Implementation of the remark serializer using LLVM bitstream.
@@ -110,12 +106,8 @@ struct BitstreamRemarkSerializer : public RemarkSerializer {
   ///    in the file.
   /// 3) A number of remark blocks.
 
-  /// We need to set up 1) and 2) first, so that we can emit 3) after. This flag
-  /// is used to emit the first two blocks only once.
-  bool DidSetUp = false;
-  bool DidFinalize = false;
   /// The helper to emit bitstream.
-  BitstreamRemarkSerializerHelper Helper;
+  std::optional<BitstreamRemarkSerializerHelper> Helper;
   /// The string table containing all the unique strings used in the output.
   /// The table can be serialized to be consumed after the compilation.
   StringTable StrTab;
@@ -151,14 +143,7 @@ private:
 
 /// Serializer of metadata for bitstream remarks.
 struct BitstreamMetaSerializer : public MetaSerializer {
-  /// This class can be used with [1] a pre-constructed
-  /// BitstreamRemarkSerializerHelper, or with [2] one that is owned by the meta
-  /// serializer. In case of [1], we need to be able to store a reference to the
-  /// object, while in case of [2] we need to store the whole object.
-  std::optional<BitstreamRemarkSerializerHelper> TmpHelper;
-  /// The actual helper, that can point to \p TmpHelper or to an external helper
-  /// object.
-  BitstreamRemarkSerializerHelper *Helper = nullptr;
+  BitstreamRemarkSerializerHelper Helper;
 
   std::optional<StringRef> ExternalFilename;
 
@@ -166,17 +151,7 @@ struct BitstreamMetaSerializer : public MetaSerializer {
   BitstreamMetaSerializer(
       raw_ostream &OS, BitstreamRemarkContainerType ContainerType,
       std::optional<StringRef> ExternalFilename = std::nullopt)
-      : MetaSerializer(OS), TmpHelper(std::nullopt), Helper(nullptr),
-        ExternalFilename(ExternalFilename) {
-    TmpHelper.emplace(ContainerType);
-    Helper = &*TmpHelper;
-  }
-
-  /// Create a new meta serializer based on a previously built \p Helper.
-  BitstreamMetaSerializer(
-      raw_ostream &OS, BitstreamRemarkSerializerHelper &Helper,
-      std::optional<StringRef> ExternalFilename = std::nullopt)
-      : MetaSerializer(OS), TmpHelper(std::nullopt), Helper(&Helper),
+      : MetaSerializer(OS), Helper(ContainerType, OS),
         ExternalFilename(ExternalFilename) {}
 
   void emit() override;

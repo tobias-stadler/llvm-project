@@ -203,7 +203,7 @@ Error BitstreamMetaParserHelper::parse() {
 }
 
 Error BitstreamRemarkParserHelper::parse() {
-  return parseBlock(*this, REMARK_BLOCK_ID, "REMARK_BLOCK");
+  return parseBlock(*this, REMARKS_BLOCK_ID, "REMARK_BLOCK");
 }
 
 BitstreamParserHelper::BitstreamParserHelper(StringRef Buffer)

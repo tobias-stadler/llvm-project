@@ -129,6 +129,8 @@ void BitstreamRemarkSerializerHelper::setupRemarkBlockInfo() {
 
     auto Abbrev = std::make_shared<BitCodeAbbrev>();
     Abbrev->Add(BitCodeAbbrevOp(RECORD_REMARK));
+    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 3)); // Type
+    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6));   // Remark Name
     RecordRemarkAbbrevID =
         Bitstream.EmitBlockInfoAbbrev(REMARKS_BLOCK_ID, Abbrev);
   }
@@ -139,10 +141,8 @@ void BitstreamRemarkSerializerHelper::setupRemarkBlockInfo() {
 
     auto Abbrev = std::make_shared<BitCodeAbbrev>();
     Abbrev->Add(BitCodeAbbrevOp(RECORD_REMARK_HEADER));
-    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 3)); // Type
-    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6));   // Remark Name
-    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6));   // Pass name
-    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 8));   // Function name
+    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // Pass name
+    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 8)); // Function name
     RecordRemarkHeaderAbbrevID =
         Bitstream.EmitBlockInfoAbbrev(REMARKS_BLOCK_ID, Abbrev);
   }
@@ -159,6 +159,16 @@ void BitstreamRemarkSerializerHelper::setupRemarkBlockInfo() {
     RecordRemarkDebugLocAbbrevID =
         Bitstream.EmitBlockInfoAbbrev(REMARKS_BLOCK_ID, Abbrev);
   }
+  {
+    setRecordName(RECORD_REMARK_DEBUG_LOC_FILE, Bitstream, R,
+                  RemarkDebugLocFileName);
+
+    auto Abbrev = std::make_shared<BitCodeAbbrev>();
+    Abbrev->Add(BitCodeAbbrevOp(RECORD_REMARK_DEBUG_LOC_FILE));
+    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // File
+    RecordRemarkDebugLocFileAbbrevID =
+        Bitstream.EmitBlockInfoAbbrev(REMARKS_BLOCK_ID, Abbrev);
+  }
 
   // The hotness of a remark.
   {
@@ -168,22 +178,6 @@ void BitstreamRemarkSerializerHelper::setupRemarkBlockInfo() {
     Abbrev->Add(BitCodeAbbrevOp(RECORD_REMARK_HOTNESS));
     Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 8)); // Hotness
     RecordRemarkHotnessAbbrevID =
-        Bitstream.EmitBlockInfoAbbrev(REMARKS_BLOCK_ID, Abbrev);
-  }
-
-  // An argument entry with a debug location attached.
-  {
-    setRecordName(RECORD_REMARK_ARG_KV_WITH_DEBUGLOC, Bitstream, R,
-                  RemarkArgWithDebugLocName);
-
-    auto Abbrev = std::make_shared<BitCodeAbbrev>();
-    Abbrev->Add(BitCodeAbbrevOp(RECORD_REMARK_ARG_KV_WITH_DEBUGLOC));
-    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // Key
-    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // Value
-    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // File
-    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // Line
-    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // Column
-    RecordRemarkArgKVWithDebugLocAbbrevID =
         Bitstream.EmitBlockInfoAbbrev(REMARKS_BLOCK_ID, Abbrev);
   }
 
@@ -294,29 +288,47 @@ void BitstreamRemarkSerializerHelper::emitLateMetaBlock(
 
 void BitstreamRemarkSerializerHelper::emitRemarkBlock(const Remark &Remark,
                                                       StringTable &StrTab) {
-  if ((Bitstream.GetCurrentBlockBitNo() / 8) > 1024) {
+  if ((Bitstream.GetCurrentBlockBitNo() / 8) > (1 << 24)) {
     exitRemarksBlock();
     enterRemarksBlock();
   }
+
+  auto emitRemarkLoc = [&](const RemarkLocation &Loc) {
+    R.clear();
+    if (Loc.SourceLine) {
+      R.push_back(RECORD_REMARK_DEBUG_LOC);
+      R.push_back(StrTab.add(Loc.SourceFilePath).first);
+      R.push_back(Loc.SourceLine);
+      R.push_back(Loc.SourceColumn);
+      Bitstream.EmitRecordWithAbbrev(RecordRemarkDebugLocAbbrevID, R);
+    } else {
+      R.push_back(RECORD_REMARK_DEBUG_LOC_FILE);
+      R.push_back(StrTab.add(Loc.SourceFilePath).first);
+      Bitstream.EmitRecordWithAbbrev(RecordRemarkDebugLocFileAbbrevID, R);
+    }
+  };
+  /*R.clear();*/
+  /*R.push_back(RECORD_REMARK);*/
+  /*Bitstream.EmitRecordWithAbbrev(RecordRemarkAbbrevID, R);*/
+  if (LastRemarkPass != Remark.PassName ||
+      LastRemarkFunction != Remark.FunctionName) {
+    R.clear();
+    R.push_back(RECORD_REMARK_HEADER);
+    R.push_back(StrTab.add(Remark.PassName).first);
+    R.push_back(StrTab.add(Remark.FunctionName).first);
+    Bitstream.EmitRecordWithAbbrev(RecordRemarkHeaderAbbrevID, R);
+    LastRemarkPass = Remark.PassName;
+    LastRemarkFunction = Remark.FunctionName;
+  }
+
   R.clear();
   R.push_back(RECORD_REMARK);
-  Bitstream.EmitRecordWithAbbrev(RecordRemarkAbbrevID, R);
-
-  R.clear();
-  R.push_back(RECORD_REMARK_HEADER);
   R.push_back(static_cast<uint64_t>(Remark.RemarkType));
   R.push_back(StrTab.add(Remark.RemarkName).first);
-  R.push_back(StrTab.add(Remark.PassName).first);
-  R.push_back(StrTab.add(Remark.FunctionName).first);
-  Bitstream.EmitRecordWithAbbrev(RecordRemarkHeaderAbbrevID, R);
+  Bitstream.EmitRecordWithAbbrev(RecordRemarkAbbrevID, R);
 
   if (const std::optional<RemarkLocation> &Loc = Remark.Loc) {
-    R.clear();
-    R.push_back(RECORD_REMARK_DEBUG_LOC);
-    R.push_back(StrTab.add(Loc->SourceFilePath).first);
-    R.push_back(Loc->SourceLine);
-    R.push_back(Loc->SourceColumn);
-    Bitstream.EmitRecordWithAbbrev(RecordRemarkDebugLocAbbrevID, R);
+    emitRemarkLoc(*Loc);
   }
 
   if (std::optional<uint64_t> Hotness = Remark.Hotness) {
@@ -331,9 +343,7 @@ void BitstreamRemarkSerializerHelper::emitRemarkBlock(const Remark &Remark,
     auto MaybeIntVal = Arg.getValAsInt();
 
     unsigned Opc = RECORD_REMARK_ARG_KV;
-    if (Arg.Loc != std::nullopt) {
-      Opc = RECORD_REMARK_ARG_KV_WITH_DEBUGLOC;
-    } else if (Arg.Key == "String") {
+    if (Arg.Key == "String") {
       Opc = RECORD_REMARK_ARG_V;
     } else if (MaybeIntVal) {
       Opc = RECORD_REMARK_ARG_KV_INT;
@@ -348,16 +358,8 @@ void BitstreamRemarkSerializerHelper::emitRemarkBlock(const Remark &Remark,
     } else {
       R.push_back(StrTab.add(Arg.Val).first);
     }
-    if (Opc == RECORD_REMARK_ARG_KV_WITH_DEBUGLOC) {
-      R.push_back(StrTab.add(Arg.Loc->SourceFilePath).first);
-      R.push_back(Arg.Loc->SourceLine);
-      R.push_back(Arg.Loc->SourceColumn);
-    }
     unsigned Abbrev;
     switch (Opc) {
-    case RECORD_REMARK_ARG_KV_WITH_DEBUGLOC:
-      Abbrev = RecordRemarkArgKVWithDebugLocAbbrevID;
-      break;
     case RECORD_REMARK_ARG_KV:
       Abbrev = RecordRemarkArgKVAbbrevID;
       break;
@@ -371,6 +373,9 @@ void BitstreamRemarkSerializerHelper::emitRemarkBlock(const Remark &Remark,
       llvm_unreachable("Illegal arg opc");
     }
     Bitstream.EmitRecordWithAbbrev(Abbrev, R);
+    if (Arg.Loc) {
+      emitRemarkLoc(*Arg.Loc);
+    }
   }
 }
 

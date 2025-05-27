@@ -82,8 +82,8 @@ enum RecordIDs {
   RECORD_REMARK,
   RECORD_REMARK_HEADER,
   RECORD_REMARK_DEBUG_LOC,
+  RECORD_REMARK_DEBUG_LOC_FILE,
   RECORD_REMARK_HOTNESS,
-  RECORD_REMARK_ARG_KV_WITH_DEBUGLOC,
   RECORD_REMARK_ARG_V,
   RECORD_REMARK_ARG_KV_INT,
   RECORD_REMARK_ARG_KV,
@@ -95,13 +95,12 @@ enum RecordIDs {
 constexpr StringLiteral MetaContainerInfoName("Container info");
 constexpr StringLiteral MetaRemarkVersionName("Remark version");
 constexpr StringLiteral MetaStrTabName("String table");
-constexpr StringLiteral MetaExternalFileName("External File");
+constexpr StringLiteral MetaExternalFileName("External file");
 constexpr StringLiteral RemarkName("Remark");
 constexpr StringLiteral RemarkHeaderName("Remark header");
 constexpr StringLiteral RemarkDebugLocName("Remark debug location");
+constexpr StringLiteral RemarkDebugLocFileName("Remark debug location file");
 constexpr StringLiteral RemarkHotnessName("Remark hotness");
-constexpr StringLiteral
-    RemarkArgWithDebugLocName("Argument with debug location");
 constexpr StringLiteral RemarkArgKVName("Argument KV");
 constexpr StringLiteral RemarkArgVName("Argument V");
 constexpr StringLiteral RemarkArgKVIntName("Argument KV int");

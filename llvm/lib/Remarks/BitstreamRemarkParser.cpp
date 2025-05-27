@@ -120,21 +120,23 @@ static Error parseRecord(BitstreamRemarkParserHelper &Parser, unsigned Code) {
     Parser.Hotness = Record[0];
     break;
   }
-  case RECORD_REMARK_ARG_KV_WITH_DEBUGLOC: {
-    if (Record.size() != 5)
-      return malformedRecord("BLOCK_REMARK", "RECORD_REMARK_ARG_WITH_DEBUGLOC");
-    // Create a temporary argument. Use that as a valid memory location for this
-    // argument entry.
-    Parser.TmpArgs.emplace_back();
-    Parser.TmpArgs.back().KeyIdx = Record[0];
-    Parser.TmpArgs.back().ValueIdx = Record[1];
-    Parser.TmpArgs.back().SourceFileNameIdx = Record[2];
-    Parser.TmpArgs.back().SourceLine = Record[3];
-    Parser.TmpArgs.back().SourceColumn = Record[4];
-    Parser.Args =
-        ArrayRef<BitstreamRemarkParserHelper::Argument>(Parser.TmpArgs);
-    break;
-  }
+  /*case RECORD_REMARK_ARG_KV_WITH_DEBUGLOC: {*/
+  /*  if (Record.size() != 5)*/
+  /*    return malformedRecord("BLOCK_REMARK",
+   * "RECORD_REMARK_ARG_WITH_DEBUGLOC");*/
+  /*  // Create a temporary argument. Use that as a valid memory location for
+   * this*/
+  /*  // argument entry.*/
+  /*  Parser.TmpArgs.emplace_back();*/
+  /*  Parser.TmpArgs.back().KeyIdx = Record[0];*/
+  /*  Parser.TmpArgs.back().ValueIdx = Record[1];*/
+  /*  Parser.TmpArgs.back().SourceFileNameIdx = Record[2];*/
+  /*  Parser.TmpArgs.back().SourceLine = Record[3];*/
+  /*  Parser.TmpArgs.back().SourceColumn = Record[4];*/
+  /*  Parser.Args =*/
+  /*      ArrayRef<BitstreamRemarkParserHelper::Argument>(Parser.TmpArgs);*/
+  /*  break;*/
+  /*}*/
   case RECORD_REMARK_ARG_KV: {
     if (Record.size() != 2)
       return malformedRecord("BLOCK_REMARK",

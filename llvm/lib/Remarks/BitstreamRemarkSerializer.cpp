@@ -286,26 +286,29 @@ void BitstreamRemarkSerializerHelper::emitLateMetaBlock(
   Bitstream.ExitBlock();
 }
 
-void BitstreamRemarkSerializerHelper::emitRemarkBlock(const Remark &Remark,
+void BitstreamRemarkSerializerHelper::emitRemark(const Remark &Remark,
                                                       StringTable &StrTab) {
   if ((Bitstream.GetCurrentBlockBitNo() / 8) > (1 << 24)) {
     exitRemarksBlock();
+    //FIXME:
+    LastRemarkPass = StringRef{};
+    LastRemarkFunction = StringRef{};
     enterRemarksBlock();
   }
 
   auto emitRemarkLoc = [&](const RemarkLocation &Loc) {
     R.clear();
-    if (Loc.SourceLine) {
+    /*if (Loc.SourceLine) {*/
       R.push_back(RECORD_REMARK_DEBUG_LOC);
       R.push_back(StrTab.add(Loc.SourceFilePath).first);
       R.push_back(Loc.SourceLine);
       R.push_back(Loc.SourceColumn);
       Bitstream.EmitRecordWithAbbrev(RecordRemarkDebugLocAbbrevID, R);
-    } else {
-      R.push_back(RECORD_REMARK_DEBUG_LOC_FILE);
-      R.push_back(StrTab.add(Loc.SourceFilePath).first);
-      Bitstream.EmitRecordWithAbbrev(RecordRemarkDebugLocFileAbbrevID, R);
-    }
+    /*} else {*/
+    /*  R.push_back(RECORD_REMARK_DEBUG_LOC_FILE);*/
+    /*  R.push_back(StrTab.add(Loc.SourceFilePath).first);*/
+    /*  Bitstream.EmitRecordWithAbbrev(RecordRemarkDebugLocFileAbbrevID, R);*/
+    /*}*/
   };
   /*R.clear();*/
   /*R.push_back(RECORD_REMARK);*/
@@ -345,7 +348,7 @@ void BitstreamRemarkSerializerHelper::emitRemarkBlock(const Remark &Remark,
     unsigned Opc = RECORD_REMARK_ARG_KV;
     if (Arg.Key == "String") {
       Opc = RECORD_REMARK_ARG_V;
-    } else if (MaybeIntVal) {
+    } else if (MaybeIntVal && *MaybeIntVal >= 0) {
       Opc = RECORD_REMARK_ARG_KV_INT;
     }
     R.push_back(Opc);
@@ -409,7 +412,7 @@ void BitstreamRemarkSerializer::finalize() {
 
 void BitstreamRemarkSerializer::emit(const Remark &Remark) {
   setup();
-  Helper->emitRemarkBlock(Remark, StrTab);
+  Helper->emitRemark(Remark, StrTab);
 }
 
 std::unique_ptr<MetaSerializer> BitstreamRemarkSerializer::metaSerializer(

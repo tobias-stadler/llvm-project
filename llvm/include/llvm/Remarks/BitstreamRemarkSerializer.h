@@ -102,7 +102,7 @@ struct BitstreamRemarkSerializerHelper {
   void exitRemarksBlock();
 
   /// Emit a remark block. The string table is required.
-  void emitRemarkBlock(const Remark &Remark, StringTable &StrTab);
+  void emitRemark(const Remark &Remark, StringTable &StrTab);
 };
 
 /// Implementation of the remark serializer using LLVM bitstream.

@@ -69,6 +69,7 @@ enum BlockIDs {
 
 constexpr StringLiteral MetaBlockName("Meta");
 constexpr StringLiteral RemarksBlockName("Remarks");
+constexpr StringLiteral RemarkKeyString("String");
 
 /// The possible records that can be encountered in the previously described
 /// blocks.

@@ -2409,10 +2409,12 @@ void AsmPrinter::emitRemarksSection(remarks::RemarkStreamer &RS) {
 
   std::string Buf;
   raw_string_ostream OS(Buf);
-  std::unique_ptr<remarks::MetaSerializer> MetaSerializer =
-      Filename ? RemarkSerializer.metaSerializer(OS, Filename->str())
-               : RemarkSerializer.metaSerializer(OS);
-  MetaSerializer->emit();
+  {
+    std::unique_ptr<remarks::MetaSerializer> MetaSerializer =
+        Filename ? RemarkSerializer.metaSerializer(OS, Filename->str())
+                 : RemarkSerializer.metaSerializer(OS);
+    MetaSerializer->emit();
+  }
 
   // Switch to the remarks section.
   OutStreamer->switchSection(RemarksSection);

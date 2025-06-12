@@ -93,7 +93,7 @@ bool LoopExtractionAnalyzer::runOnFunction(Function &F) {
                       << L->getHeader()->getParent()->getName() << ":\n");
     LLVM_DEBUG(L->dump());
     if (!L->isLoopSimplifyForm()) {
-      LLVM_DEBUG(errs() << "Loop is not in Loop Simply Form!\n");
+      LLVM_DEBUG(dbgs() << "Loop is not in Loop Simply Form!\n");
       ++NumIsNotSimplified;
     }
     if (Function *ExtractedFunc = extractLoop(L, LI, DT)) {
@@ -167,7 +167,8 @@ bool LoopExtractionAnalyzer::runOnModule(Module &M) {
     raw_string_ostream ModuleStrS(ModuleStr);
     ClonedModPtr->print(ModuleStrS, nullptr);
     return OptimizationRemarkAnalysis(DEBUG_TYPE, "ModuleDump", FirstF)
-           << ModuleStr;
+           << ore::NV("ModuleName", ClonedModPtr->getName())
+           << ore::NV("Module", ModuleStr);
   });
 
   return false;

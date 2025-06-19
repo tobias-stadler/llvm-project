@@ -548,6 +548,21 @@ public:
     return dyn_cast<T>(SimpleV);
   }
 
+  template <> Function *getSimplifiedValue<Function>(Value *V) const {
+    Value *SimpleV = SimplifiedValues.lookup(V);
+    return dyn_cast_if_present<Function>(SimpleV);
+  }
+
+  template <> Constant *getSimplifiedValue<Constant>(Value *V) const {
+    Value *SimpleV = SimplifiedValues.lookup(V);
+    return dyn_cast_if_present<Constant>(SimpleV);
+  }
+
+  template <> ConstantInt *getSimplifiedValue<ConstantInt>(Value *V) const {
+    Value *SimpleV = SimplifiedValues.lookup(V);
+    return dyn_cast_if_present<ConstantInt>(SimpleV);
+  }
+
   // Keep a bunch of stats about the cost savings found so we can print them
   // out when debugging.
   unsigned NumConstantArgs = 0;
@@ -2309,21 +2324,18 @@ bool CallAnalyzer::visitStore(StoreInst &I) {
 }
 
 bool CallAnalyzer::visitExtractValue(ExtractValueInst &I) {
-  if (simplifyInstruction(I))
-    return true;
+  Value *Op = I.getAggregateOperand();
 
-  /*Value *Op = I.getAggregateOperand();*/
-  /**/
-  /*// Special handling, because we want to simplify extractvalue against a*/
-  /*// potential insertvalue from the caller.*/
-  /*if (Value *SimpleOp = getSimplifiedValueUnchecked(Op)) {*/
-  /*  SimplifyQuery SQ(DL);*/
-  /*  Value *SimpleV = simplifyExtractValueInst(SimpleOp, I.getIndices(), SQ);*/
-  /*  if (SimpleV) {*/
-  /*    SimplifiedValues[&I] = SimpleV;*/
-  /*    return true;*/
-  /*  }*/
-  /*}*/
+  // Special handling, because we want to simplify extractvalue against a
+  // potential insertvalue from the caller.
+  if (Value *SimpleOp = getSimplifiedValueUnchecked(Op)) {
+    SimplifyQuery SQ(DL);
+    Value *SimpleV = simplifyExtractValueInst(SimpleOp, I.getIndices(), SQ);
+    if (SimpleV) {
+      SimplifiedValues[&I] = SimpleV;
+      return true;
+    }
+  }
 
   // SROA can't look through these, but they may be free.
   return Base::visitExtractValue(I);

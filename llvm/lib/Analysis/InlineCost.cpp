@@ -537,6 +537,8 @@ public:
     Value *SimpleV = SimplifiedValues.lookup(V);
     if (!SimpleV)
       return nullptr;
+    if constexpr (std::is_base_of_v<Constant, T>)
+      return dyn_cast<T>(SimpleV);
     if (auto *I = dyn_cast<Instruction>(SimpleV)) {
       if (I->getFunction() != &F)
         return nullptr;
@@ -546,21 +548,6 @@ public:
     } else if (!isa<Constant>(SimpleV))
       return nullptr;
     return dyn_cast<T>(SimpleV);
-  }
-
-  template <> Function *getSimplifiedValue<Function>(Value *V) const {
-    Value *SimpleV = SimplifiedValues.lookup(V);
-    return dyn_cast_if_present<Function>(SimpleV);
-  }
-
-  template <> Constant *getSimplifiedValue<Constant>(Value *V) const {
-    Value *SimpleV = SimplifiedValues.lookup(V);
-    return dyn_cast_if_present<Constant>(SimpleV);
-  }
-
-  template <> ConstantInt *getSimplifiedValue<ConstantInt>(Value *V) const {
-    Value *SimpleV = SimplifiedValues.lookup(V);
-    return dyn_cast_if_present<ConstantInt>(SimpleV);
   }
 
   // Keep a bunch of stats about the cost savings found so we can print them

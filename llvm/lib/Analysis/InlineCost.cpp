@@ -538,10 +538,10 @@ public:
     if (!SimpleV)
       return nullptr;
 
-    // Skip checks if we know T is a global. This has a small, but measurable
-    // impact on compile-time.
-    if constexpr (std::is_base_of_v<Constant, T>)
-      return dyn_cast<T>(SimpleV);
+    /*// Skip checks if we know T is a global. This has a small, but measurable*/
+    /*// impact on compile-time.*/
+    /*if constexpr (std::is_base_of_v<Constant, T>)*/
+    /*  return dyn_cast<T>(SimpleV);*/
 
     // Make sure the simplified Value is owned by this function
     if (auto *I = dyn_cast<Instruction>(SimpleV)) {

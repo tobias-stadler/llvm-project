@@ -2228,22 +2228,24 @@ bool CallAnalyzer::visitSub(BinaryOperator &I) {
 
 bool CallAnalyzer::visitBinaryOperator(BinaryOperator &I) {
   Value *LHS = I.getOperand(0), *RHS = I.getOperand(1);
-  Constant *CLHS = getDirectOrSimplifiedValue<Constant>(LHS);
-  Constant *CRHS = getDirectOrSimplifiedValue<Constant>(RHS);
+  Value *SimpleLHS = getSimplifiedValue<Constant>(LHS);
+  Value *SimpleRHS = getSimplifiedValue<Constant>(RHS);
+  if (SimpleLHS || SimpleRHS) {
+    SimpleLHS = SimpleLHS ? SimpleLHS : LHS;
+    SimpleRHS = SimpleRHS ? SimpleRHS : RHS;
+    Value *SimpleV = nullptr;
+    if (auto FI = dyn_cast<FPMathOperator>(&I))
+      SimpleV = simplifyBinOp(I.getOpcode(), SimpleLHS, SimpleRHS,
+                              FI->getFastMathFlags(), DL);
+    else
+      SimpleV = simplifyBinOp(I.getOpcode(), SimpleLHS, SimpleRHS, DL);
 
-  Value *SimpleV = nullptr;
-  if (auto FI = dyn_cast<FPMathOperator>(&I))
-    SimpleV = simplifyBinOp(I.getOpcode(), CLHS ? CLHS : LHS, CRHS ? CRHS : RHS,
-                            FI->getFastMathFlags(), DL);
-  else
-    SimpleV =
-        simplifyBinOp(I.getOpcode(), CLHS ? CLHS : LHS, CRHS ? CRHS : RHS, DL);
+    if (Constant *C = dyn_cast_or_null<Constant>(SimpleV))
+      SimplifiedValues[&I] = C;
 
-  if (Constant *C = dyn_cast_or_null<Constant>(SimpleV))
-    SimplifiedValues[&I] = C;
-
-  if (SimpleV)
-    return true;
+    if (SimpleV)
+      return true;
+  }
 
   // Disable any SROA on arguments to arbitrary, unsimplified binary operators.
   disableSROA(LHS);

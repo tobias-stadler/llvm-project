@@ -19,8 +19,6 @@
 using namespace llvm;
 using namespace llvm::remarks;
 
-// Use the same keys whether we use a string table or not (respectively, T is an
-// unsigned or a StringRef).
 static void
 mapRemarkHeader(yaml::IO &io, StringRef PassName, StringRef RemarkName,
                 std::optional<RemarkLocation> RL, StringRef FunctionName,
@@ -131,9 +129,9 @@ template <> struct MappingTraits<Argument> {
 
 LLVM_YAML_IS_SEQUENCE_VECTOR(Argument)
 
-YAMLRemarkSerializer::YAMLRemarkSerializer(raw_ostream &OS, SerializerMode Mode,
+YAMLRemarkSerializer::YAMLRemarkSerializer(raw_ostream &OS,
                                            std::optional<StringTable> StrTabIn)
-    : RemarkSerializer(Format::YAML, OS, Mode),
+    : RemarkSerializer(Format::YAML, OS),
       YAMLOutput(OS, reinterpret_cast<void *>(this)) {
   StrTab = std::move(StrTabIn);
 }

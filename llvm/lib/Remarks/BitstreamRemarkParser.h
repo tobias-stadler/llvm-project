@@ -128,7 +128,7 @@ struct BitstreamRemarkParser : public RemarkParser {
   uint64_t ContainerVersion = 0;
   uint64_t RemarkVersion = 0;
   BitstreamRemarkContainerType ContainerType =
-      BitstreamRemarkContainerType::Standalone;
+      BitstreamRemarkContainerType::RemarksFile;
   /// Wether the parser is ready to parse remarks.
   bool ReadyToParseRemarks = false;
 

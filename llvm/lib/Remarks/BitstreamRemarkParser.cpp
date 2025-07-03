@@ -351,14 +351,14 @@ Error BitstreamRemarkParser::parseMeta() {
   if (Error E = processCommonMeta(MetaHelper))
     return E;
 
-  switch (ContainerType) {
-  case BitstreamRemarkContainerType::Standalone:
-    return processStandaloneMeta(MetaHelper);
-  case BitstreamRemarkContainerType::SeparateRemarksFile:
-    return processSeparateRemarksFileMeta(MetaHelper);
-  case BitstreamRemarkContainerType::SeparateRemarksMeta:
-    return processSeparateRemarksMetaMeta(MetaHelper);
-  }
+  /*switch (ContainerType) {*/
+  /*case BitstreamRemarkContainerType::Standalone:*/
+  /*  return processStandaloneMeta(MetaHelper);*/
+  /*case BitstreamRemarkContainerType::SeparateRemarksFile:*/
+  /*  return processSeparateRemarksFileMeta(MetaHelper);*/
+  /*case BitstreamRemarkContainerType::SeparateRemarksMeta:*/
+  /*  return processSeparateRemarksMetaMeta(MetaHelper);*/
+  /*}*/
   llvm_unreachable("Unknown BitstreamRemarkContainerType enum");
 }
 
@@ -449,11 +449,11 @@ Error BitstreamRemarkParser::processExternalFilePath(
   if (Error E = processCommonMeta(SeparateMetaHelper))
     return E;
 
-  if (ContainerType != BitstreamRemarkContainerType::SeparateRemarksFile)
-    return createStringError(
-        std::make_error_code(std::errc::illegal_byte_sequence),
-        "Error while parsing external file's BLOCK_META: wrong container "
-        "type.");
+  /*if (ContainerType != BitstreamRemarkContainerType::SeparateRemarksFile)*/
+  return createStringError(
+      std::make_error_code(std::errc::illegal_byte_sequence),
+      "Error while parsing external file's BLOCK_META: wrong container "
+      "type.");
 
   if (PreviousContainerVersion != ContainerVersion)
     return createStringError(

@@ -14,6 +14,7 @@
 #include "llvm/Remarks/BitstreamRemarkSerializer.h"
 #include "llvm/Remarks/BitstreamRemarkContainer.h"
 #include "llvm/Remarks/Remark.h"
+#include <cassert>
 #include <optional>
 
 using namespace llvm;
@@ -222,19 +223,11 @@ void BitstreamRemarkSerializerHelper::setupBlockInfo() {
   setupMetaBlockInfo();
 
   switch (ContainerType) {
-  case BitstreamRemarkContainerType::SeparateRemarksMeta:
-    // Needs a string table that the separate remark file is using.
-    setupMetaStrTab();
+  case BitstreamRemarkContainerType::RemarksMeta:
     // Needs to know where the external remarks file is.
     setupMetaExternalFile();
     break;
-  case BitstreamRemarkContainerType::SeparateRemarksFile:
-    // Contains remarks: emit the version.
-    setupMetaRemarkVersion();
-    // Contains remarks: emit the remark abbrevs.
-    setupRemarkBlockInfo();
-    break;
-  case BitstreamRemarkContainerType::Standalone:
+  case BitstreamRemarkContainerType::RemarksFile:
     // Contains remarks: emit the version.
     setupMetaRemarkVersion();
     // Needs a string table.
@@ -249,7 +242,6 @@ void BitstreamRemarkSerializerHelper::setupBlockInfo() {
 
 void BitstreamRemarkSerializerHelper::emitMetaBlock(
     uint64_t ContainerVersion, std::optional<uint64_t> RemarkVersion,
-    std::optional<const StringTable *> StrTab,
     std::optional<StringRef> Filename) {
   // Emit the meta block
   Bitstream.EnterSubblock(META_BLOCK_ID, 3);
@@ -262,24 +254,24 @@ void BitstreamRemarkSerializerHelper::emitMetaBlock(
   Bitstream.EmitRecordWithAbbrev(RecordMetaContainerInfoAbbrevID, R);
 
   switch (ContainerType) {
-  case BitstreamRemarkContainerType::SeparateRemarksMeta:
-    assert(StrTab != std::nullopt && *StrTab != nullptr);
-    emitMetaStrTab(**StrTab);
+  case BitstreamRemarkContainerType::RemarksMeta:
     assert(Filename != std::nullopt);
     emitMetaExternalFile(*Filename);
     break;
-  case BitstreamRemarkContainerType::SeparateRemarksFile:
+  case BitstreamRemarkContainerType::RemarksFile:
     assert(RemarkVersion != std::nullopt);
     emitMetaRemarkVersion(*RemarkVersion);
-    break;
-  case BitstreamRemarkContainerType::Standalone:
-    assert(RemarkVersion != std::nullopt);
-    emitMetaRemarkVersion(*RemarkVersion);
-    assert(StrTab != std::nullopt && *StrTab != nullptr);
-    emitMetaStrTab(**StrTab);
     break;
   }
 
+  Bitstream.ExitBlock();
+}
+
+void BitstreamRemarkSerializerHelper::emitLateMetaBlock(
+    const StringTable &StrTab) {
+  // Emit the late meta block (after all remarks are serialized)
+  Bitstream.EnterSubblock(META_BLOCK_ID, 3);
+  emitMetaStrTab(StrTab);
   Bitstream.ExitBlock();
 }
 
@@ -369,64 +361,52 @@ StringRef BitstreamRemarkSerializerHelper::getBuffer() {
   return StringRef(Encoded.data(), Encoded.size());
 }
 
-BitstreamRemarkSerializer::BitstreamRemarkSerializer(raw_ostream &OS,
-                                                     SerializerMode Mode)
-    : RemarkSerializer(Format::Bitstream, OS, Mode),
-      Helper(BitstreamRemarkContainerType::SeparateRemarksFile) {
-  assert(Mode == SerializerMode::Separate &&
-         "For SerializerMode::Standalone, a pre-filled string table needs to "
-         "be provided.");
-  // We always use a string table with bitstream.
-  StrTab.emplace();
-}
+BitstreamRemarkSerializer::BitstreamRemarkSerializer(raw_ostream &OS)
+    : RemarkSerializer(Format::Bitstream, OS),
+      Helper(BitstreamRemarkContainerType::RemarksFile) {}
 
 BitstreamRemarkSerializer::BitstreamRemarkSerializer(raw_ostream &OS,
-                                                     SerializerMode Mode,
-                                                     StringTable StrTabIn)
-    : RemarkSerializer(Format::Bitstream, OS, Mode),
-      Helper(Mode == SerializerMode::Separate
-                 ? BitstreamRemarkContainerType::SeparateRemarksFile
-                 : BitstreamRemarkContainerType::Standalone) {
-  StrTab = std::move(StrTabIn);
+                                                     StringTable StrTab)
+    : BitstreamRemarkSerializer(OS) {
+  this->StrTab = std::move(StrTab);
+}
+
+BitstreamRemarkSerializer::~BitstreamRemarkSerializer() { finalize(); }
+
+void BitstreamRemarkSerializer::setup() {
+  assert(!DidFinalize);
+  if (DidSetUp)
+    return;
+  Helper.setupBlockInfo();
+  Helper.emitMetaBlock(CurrentContainerVersion, CurrentRemarkVersion);
+  Helper.flushToStream(OS);
+  DidSetUp = true;
+}
+
+void BitstreamRemarkSerializer::finalize() {
+  assert(DidSetUp);
+  if (DidFinalize)
+    return;
+  Helper.emitLateMetaBlock(StrTab);
+  Helper.flushToStream(OS);
+  DidFinalize = true;
 }
 
 void BitstreamRemarkSerializer::emit(const Remark &Remark) {
-  if (!DidSetUp) {
-    // Emit the metadata that is embedded in the remark file.
-    // If we're in standalone mode, serialize the string table as well.
-    bool IsStandalone =
-        Helper.ContainerType == BitstreamRemarkContainerType::Standalone;
-    BitstreamMetaSerializer MetaSerializer(
-        OS, Helper,
-        IsStandalone ? &*StrTab
-                     : std::optional<const StringTable *>(std::nullopt));
-    MetaSerializer.emit();
-    DidSetUp = true;
-  }
-
-  assert(DidSetUp &&
-         "The Block info block and the meta block were not emitted yet.");
-  Helper.emitRemarkBlock(Remark, *StrTab);
-
+  setup();
+  Helper.emitRemarkBlock(Remark, StrTab);
   Helper.flushToStream(OS);
 }
 
 std::unique_ptr<MetaSerializer> BitstreamRemarkSerializer::metaSerializer(
     raw_ostream &OS, std::optional<StringRef> ExternalFilename) {
-  assert(Helper.ContainerType !=
-         BitstreamRemarkContainerType::SeparateRemarksMeta);
-  bool IsStandalone =
-      Helper.ContainerType == BitstreamRemarkContainerType::Standalone;
   return std::make_unique<BitstreamMetaSerializer>(
-      OS,
-      IsStandalone ? BitstreamRemarkContainerType::Standalone
-                   : BitstreamRemarkContainerType::SeparateRemarksMeta,
-      &*StrTab, ExternalFilename);
+      OS, BitstreamRemarkContainerType::RemarksMeta, ExternalFilename);
 }
 
 void BitstreamMetaSerializer::emit() {
   Helper->setupBlockInfo();
-  Helper->emitMetaBlock(CurrentContainerVersion, CurrentRemarkVersion, StrTab,
+  Helper->emitMetaBlock(CurrentContainerVersion, CurrentRemarkVersion,
                         ExternalFilename);
   Helper->flushToStream(OS);
 }

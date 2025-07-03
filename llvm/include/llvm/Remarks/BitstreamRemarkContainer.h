@@ -28,30 +28,30 @@ constexpr uint64_t CurrentContainerVersion = 0;
 constexpr StringLiteral ContainerMagic("RMRK");
 
 /// Type of the remark container.
-/// The remark container has two modes:
-/// * separate: the metadata is separate from the remarks and points to the
-///             auxiliary file that contains the remarks.
-/// * standalone: the metadata and the remarks are emitted together.
 enum class BitstreamRemarkContainerType {
-  /// The metadata emitted separately.
-  /// This will contain the following:
-  /// * Container version and type
-  /// * String table
-  /// * External file
-  SeparateRemarksMeta,
-  /// The remarks emitted separately.
-  /// This will contain the following:
-  /// * Container version and type
-  /// * Remark version
-  SeparateRemarksFile,
-  /// Everything is emitted together.
-  /// This will contain the following:
-  /// * Container version and type
-  /// * Remark version
-  /// * String table
-  Standalone,
-  First = SeparateRemarksMeta,
-  Last = Standalone,
+  /// Emit a link to an external remarks file
+  /// (usually as a section of the object file, to enable discovery of all
+  /// remarks files from the final linked object file)
+  /// RemarksMeta:
+  ///   | Meta:
+  ///   | | Container info
+  ///   | | External file
+  RemarksMeta,
+  /// Emit metadata and remarks into a file
+  /// RemarksFile:
+  ///   | Meta:
+  ///   | | Container info
+  ///   | | Remark version
+  ///   | Remarks:
+  ///   | | Remark0
+  ///   | | Remark1
+  ///   | | Remark2
+  ///   | | ...
+  ///   | Late Meta:
+  ///   | | String table
+  RemarksFile,
+  First = RemarksMeta,
+  Last = RemarksFile
 };
 
 /// The possible blocks that will be encountered in a bitstream remark

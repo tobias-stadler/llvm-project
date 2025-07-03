@@ -36,8 +36,7 @@ struct LLVM_ABI YAMLRemarkSerializer : public RemarkSerializer {
   /// The YAML streamer.
   yaml::Output YAMLOutput;
 
-  YAMLRemarkSerializer(raw_ostream &OS, SerializerMode Mode,
-                       std::optional<StringTable> StrTab = std::nullopt);
+  YAMLRemarkSerializer(raw_ostream &OS);
 
   void emit(const Remark &Remark) override;
   std::unique_ptr<MetaSerializer> metaSerializer(
@@ -47,11 +46,6 @@ struct LLVM_ABI YAMLRemarkSerializer : public RemarkSerializer {
   static bool classof(const RemarkSerializer *S) {
     return S->SerializerFormat == Format::YAML;
   }
-
-protected:
-  YAMLRemarkSerializer(Format SerializerFormat, raw_ostream &OS,
-                       SerializerMode Mode,
-                       std::optional<StringTable> StrTab = std::nullopt);
 };
 
 struct LLVM_ABI YAMLMetaSerializer : public MetaSerializer {

@@ -226,7 +226,7 @@ void BitstreamRemarkSerializerHelper::setupBlockInfo() {
   setupMetaBlockInfo();
 
   switch (ContainerType) {
-  case BitstreamRemarkContainerType::RemarksMeta:
+  case BitstreamRemarkContainerType::RemarksFileExternal:
     // Needs to know where the external remarks file is.
     setupMetaExternalFile();
     break;
@@ -257,7 +257,7 @@ void BitstreamRemarkSerializerHelper::emitMetaBlock(
   Bitstream.EmitRecordWithAbbrev(RecordMetaContainerInfoAbbrevID, R);
 
   switch (ContainerType) {
-  case BitstreamRemarkContainerType::RemarksMeta:
+  case BitstreamRemarkContainerType::RemarksFileExternal:
     assert(Filename != std::nullopt);
     emitMetaExternalFile(*Filename);
     break;
@@ -298,30 +298,30 @@ void BitstreamRemarkSerializerHelper::emitRemark(const Remark &Remark,
 
   auto emitRemarkLoc = [&](const RemarkLocation &Loc) {
     R.clear();
-    /*if (Loc.SourceLine) {*/
-      R.push_back(RECORD_REMARK_DEBUG_LOC);
-      R.push_back(StrTab.add(Loc.SourceFilePath).first);
-      R.push_back(Loc.SourceLine);
-      R.push_back(Loc.SourceColumn);
-      Bitstream.EmitRecordWithAbbrev(RecordRemarkDebugLocAbbrevID, R);
+    R.push_back(RECORD_REMARK_DEBUG_LOC);
+    R.push_back(StrTab.add(Loc.SourceFilePath).first);
+    R.push_back(Loc.SourceLine);
+    R.push_back(Loc.SourceColumn);
+    Bitstream.EmitRecordWithAbbrev(RecordRemarkDebugLocAbbrevID, R);
+  };
     /*} else {*/
     /*  R.push_back(RECORD_REMARK_DEBUG_LOC_FILE);*/
     /*  R.push_back(StrTab.add(Loc.SourceFilePath).first);*/
     /*  Bitstream.EmitRecordWithAbbrev(RecordRemarkDebugLocFileAbbrevID, R);*/
     /*}*/
   };
-  /*R.clear();*/
-  /*R.push_back(RECORD_REMARK);*/
-  /*Bitstream.EmitRecordWithAbbrev(RecordRemarkAbbrevID, R);*/
+
   if (LastRemarkPass != Remark.PassName ||
       LastRemarkFunction != Remark.FunctionName) {
     R.clear();
     R.push_back(RECORD_REMARK_HEADER);
-    R.push_back(StrTab.add(Remark.PassName).first);
-    R.push_back(StrTab.add(Remark.FunctionName).first);
+    auto PassN = StrTab.add(Remark.PassName);
+    auto FuncN = StrTab.add(Remark.FunctionName);
+    R.push_back(PassN.first);
+    R.push_back(FuncN.first);
     Bitstream.EmitRecordWithAbbrev(RecordRemarkHeaderAbbrevID, R);
-    LastRemarkPass = Remark.PassName;
-    LastRemarkFunction = Remark.FunctionName;
+    LastRemarkPass = PassN.second;
+    LastRemarkFunction = FuncN.second;
   }
 
   R.clear();
@@ -418,7 +418,7 @@ void BitstreamRemarkSerializer::emit(const Remark &Remark) {
 std::unique_ptr<MetaSerializer> BitstreamRemarkSerializer::metaSerializer(
     raw_ostream &OS, std::optional<StringRef> ExternalFilename) {
   return std::make_unique<BitstreamMetaSerializer>(
-      OS, BitstreamRemarkContainerType::RemarksMeta, ExternalFilename);
+      OS, BitstreamRemarkContainerType::RemarksFileExternal, ExternalFilename);
 }
 
 void BitstreamMetaSerializer::emit() {

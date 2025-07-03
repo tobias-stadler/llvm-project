@@ -127,8 +127,7 @@ struct BitstreamRemarkSerializer : public RemarkSerializer {
   ~BitstreamRemarkSerializer() override;
 
   /// Emit a remark to the stream. This also emits the metadata associated to
-  /// the remarks based on the SerializerMode specified at construction.
-  /// This writes the serialized output to the provided stream.
+  /// the remarks. This writes the serialized output to the provided stream.
   void emit(const Remark &Remark) override;
 
   void finalize() override;

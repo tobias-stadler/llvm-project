@@ -34,18 +34,18 @@ static void checkAnalyze(StringRef Input, StringRef Expected) {
   EXPECT_EQ(OutputOS.str(), Expected);
 }
 
-static void check(remarks::SerializerMode Mode, const remarks::Remark &R,
-                  StringRef ExpectedR, std::optional<StringRef> ExpectedMeta,
-                  std::optional<remarks::StringTable> StrTab) {
+static void check(const remarks::Remark &R, StringRef ExpectedR,
+                  std::optional<StringRef> ExpectedMeta = std::nullopt,
+                  std::optional<remarks::StringTable> StrTab = std::nullopt) {
   // Emit the remark.
   std::string InputBuf;
   raw_string_ostream InputOS(InputBuf);
   Expected<std::unique_ptr<remarks::RemarkSerializer>> MaybeSerializer = [&] {
     if (StrTab)
-      return createRemarkSerializer(remarks::Format::Bitstream, Mode, InputOS,
+      return createRemarkSerializer(remarks::Format::Bitstream, InputOS,
                                     std::move(*StrTab));
     else
-      return createRemarkSerializer(remarks::Format::Bitstream, Mode, InputOS);
+      return createRemarkSerializer(remarks::Format::Bitstream, InputOS);
   }();
   EXPECT_FALSE(errorToBool(MaybeSerializer.takeError()));
   std::unique_ptr<remarks::RemarkSerializer> Serializer =
@@ -64,20 +64,6 @@ static void check(remarks::SerializerMode Mode, const remarks::Remark &R,
     MetaSerializer->emit();
     checkAnalyze(MetaOS.str(), *ExpectedMeta);
   }
-}
-
-static void check(const remarks::Remark &R, StringRef ExpectedR,
-                  StringRef ExpectedMeta,
-                  std::optional<remarks::StringTable> StrTab = std::nullopt) {
-  return check(remarks::SerializerMode::Separate, R, ExpectedR, ExpectedMeta,
-               std::move(StrTab));
-}
-
-static void
-checkStandalone(const remarks::Remark &R, StringRef ExpectedR,
-                std::optional<remarks::StringTable> StrTab = std::nullopt) {
-  return check(remarks::SerializerMode::Standalone, R, ExpectedR,
-               /*ExpectedMeta=*/std::nullopt, std::move(StrTab));
 }
 
 TEST(BitstreamRemarkSerializer, SeparateRemarkFileNoOptionals) {
@@ -323,7 +309,7 @@ TEST(BitstreamRemarkSerializer, Standalone) {
   R.Args.back().Loc->SourceFilePath = "argpath";
   R.Args.back().Loc->SourceLine = 11;
   R.Args.back().Loc->SourceColumn = 66;
-  checkStandalone(
+  check(
       R,
       "<BLOCKINFO_BLOCK/>\n"
       "<Meta BlockID=8 NumWords=15 BlockCodeSize=3>\n"
@@ -339,6 +325,6 @@ TEST(BitstreamRemarkSerializer, Standalone) {
       "  <Remark hotness codeid=7 abbrevid=6 op0=999999999/>\n"
       "  <Argument with debug location codeid=8 abbrevid=7 op0=4 op1=5 op2=6 "
       "op3=11 op4=66/>\n"
-      "</Remark>\n",
+      "</Remark>\n", std::nullopt,
       std::move(StrTab));
 }

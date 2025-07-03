@@ -41,9 +41,7 @@ remarks::createRemarkSerializer(Format RemarksFormat, raw_ostream &OS,
     return createStringError(std::errc::invalid_argument,
                              "Invalid remark serializer format.");
   case Format::YAML:
-    return createStringError(
-        std::errc::invalid_argument,
-        "YAML remark format does not support StringTable.");
+    return std::make_unique<YAMLRemarkSerializer>(OS, std::move(StrTab));
   case Format::Bitstream:
     return std::make_unique<BitstreamRemarkSerializer>(OS, std::move(StrTab));
   }

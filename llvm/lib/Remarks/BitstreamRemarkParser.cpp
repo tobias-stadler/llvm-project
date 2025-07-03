@@ -83,7 +83,7 @@ Error BitstreamMetaParserHelper::parseRecord(unsigned Code) {
     if (Container->Version != CurrentContainerVersion) {
       return createStringError(
           std::make_error_code(std::errc::illegal_byte_sequence),
-          "Unsupported remark container version (expected: %ul, got: %ul). "
+          "Unsupported remark container version (expected: %u, read: %u). "
           "Please upgrade/downgrade your toolchain to read this container.",
           CurrentContainerVersion, Container->Version);
     }
@@ -96,7 +96,7 @@ Error BitstreamMetaParserHelper::parseRecord(unsigned Code) {
     if (*RemarkVersion != CurrentRemarkVersion) {
       return createStringError(
           std::make_error_code(std::errc::illegal_byte_sequence),
-          "Unsupported remark version in container (expected: %ul, got: %ul). "
+          "Unsupported remark version in container (expected: %u, read: %u). "
           "Please upgrade/downgrade your toolchain to read this container.",
           CurrentRemarkVersion, *RemarkVersion);
     }
@@ -402,7 +402,7 @@ Error BitstreamRemarkParser::parseMeta() {
     return E;
 
   switch (ContainerType) {
-  case BitstreamRemarkContainerType::RemarksMeta:
+  case BitstreamRemarkContainerType::RemarksFileExternal:
     return processExternalFilePath();
   case BitstreamRemarkContainerType::RemarksFile:
     return processFileContainerMeta();

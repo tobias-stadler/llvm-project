@@ -37,6 +37,7 @@ struct LLVM_ABI YAMLRemarkSerializer : public RemarkSerializer {
   yaml::Output YAMLOutput;
 
   YAMLRemarkSerializer(raw_ostream &OS);
+  YAMLRemarkSerializer(raw_ostream &OS, StringTable StrTabIn);
 
   void emit(const Remark &Remark) override;
   std::unique_ptr<MetaSerializer> metaSerializer(

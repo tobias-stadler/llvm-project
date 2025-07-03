@@ -23,7 +23,7 @@ namespace remarks {
 
 /// The current version of the remark container.
 /// Note: this is different from the version of the remark entry.
-constexpr uint64_t CurrentContainerVersion = 0;
+constexpr uint64_t CurrentContainerVersion = 1;
 /// The magic number used for identifying remark blocks.
 constexpr StringLiteral ContainerMagic("RMRK");
 
@@ -32,11 +32,11 @@ enum class BitstreamRemarkContainerType {
   /// Emit a link to an external remarks file
   /// (usually as a section of the object file, to enable discovery of all
   /// remarks files from the final linked object file)
-  /// RemarksMeta:
+  /// RemarksFileExternal:
   ///   | Meta:
   ///   | | Container info
   ///   | | External file
-  RemarksMeta,
+  RemarksFileExternal,
   /// Emit metadata and remarks into a file
   /// RemarksFile:
   ///   | Meta:
@@ -50,7 +50,7 @@ enum class BitstreamRemarkContainerType {
   ///   | Late Meta:
   ///   | | String table
   RemarksFile,
-  First = RemarksMeta,
+  First = RemarksFileExternal,
   Last = RemarksFile
 };
 

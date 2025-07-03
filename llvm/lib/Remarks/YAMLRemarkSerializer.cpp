@@ -129,10 +129,13 @@ template <> struct MappingTraits<Argument> {
 
 LLVM_YAML_IS_SEQUENCE_VECTOR(Argument)
 
-YAMLRemarkSerializer::YAMLRemarkSerializer(raw_ostream &OS,
-                                           std::optional<StringTable> StrTabIn)
+YAMLRemarkSerializer::YAMLRemarkSerializer(raw_ostream &OS)
     : RemarkSerializer(Format::YAML, OS),
-      YAMLOutput(OS, reinterpret_cast<void *>(this)) {
+      YAMLOutput(OS, reinterpret_cast<void *>(this)) {}
+
+YAMLRemarkSerializer::YAMLRemarkSerializer(raw_ostream &OS,
+                                           StringTable StrTabIn)
+    : YAMLRemarkSerializer(OS) {
   StrTab = std::move(StrTabIn);
 }
 

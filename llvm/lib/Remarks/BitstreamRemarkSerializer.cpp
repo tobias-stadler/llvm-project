@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Remarks/BitstreamRemarkSerializer.h"
+#include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/Remarks/BitstreamRemarkContainer.h"
 #include "llvm/Remarks/Remark.h"
 #include <cassert>
@@ -159,16 +160,6 @@ void BitstreamRemarkSerializerHelper::setupRemarkBlockInfo() {
     RecordRemarkDebugLocAbbrevID =
         Bitstream.EmitBlockInfoAbbrev(REMARKS_BLOCK_ID, Abbrev);
   }
-  {
-    setRecordName(RECORD_REMARK_DEBUG_LOC_FILE, Bitstream, R,
-                  RemarkDebugLocFileName);
-
-    auto Abbrev = std::make_shared<BitCodeAbbrev>();
-    Abbrev->Add(BitCodeAbbrevOp(RECORD_REMARK_DEBUG_LOC_FILE));
-    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // File
-    RecordRemarkDebugLocFileAbbrevID =
-        Bitstream.EmitBlockInfoAbbrev(REMARKS_BLOCK_ID, Abbrev);
-  }
 
   // The hotness of a remark.
   {
@@ -210,6 +201,24 @@ void BitstreamRemarkSerializerHelper::setupRemarkBlockInfo() {
     Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // Key
     Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 7)); // Value
     RecordRemarkArgKVIntAbbrevID =
+        Bitstream.EmitBlockInfoAbbrev(REMARKS_BLOCK_ID, Abbrev);
+  }
+  {
+    setRecordName(RECORD_REMARK_TAG, Bitstream, R, RemarkTagName);
+
+    auto Abbrev = std::make_shared<BitCodeAbbrev>();
+    Abbrev->Add(BitCodeAbbrevOp(RECORD_REMARK_TAG));
+    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // Tag ID
+    RecordRemarkTagAbbrevID =
+        Bitstream.EmitBlockInfoAbbrev(REMARKS_BLOCK_ID, Abbrev);
+  }
+  {
+    setRecordName(RECORD_REMARK_BLOB, Bitstream, R, RemarkBlobName);
+
+    auto Abbrev = std::make_shared<BitCodeAbbrev>();
+    Abbrev->Add(BitCodeAbbrevOp(RECORD_REMARK_BLOB));
+    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob));
+    RecordRemarkBlobAbbrevID =
         Bitstream.EmitBlockInfoAbbrev(REMARKS_BLOCK_ID, Abbrev);
   }
 }
@@ -304,13 +313,16 @@ void BitstreamRemarkSerializerHelper::emitRemark(const Remark &Remark,
     R.push_back(Loc.SourceColumn);
     Bitstream.EmitRecordWithAbbrev(RecordRemarkDebugLocAbbrevID, R);
   };
-    /*} else {*/
-    /*  R.push_back(RECORD_REMARK_DEBUG_LOC_FILE);*/
-    /*  R.push_back(StrTab.add(Loc.SourceFilePath).first);*/
-    /*  Bitstream.EmitRecordWithAbbrev(RecordRemarkDebugLocFileAbbrevID, R);*/
-    /*}*/
-  };
 
+  auto emitTag = [&](Tag Tg) {
+    R.clear();
+    R.push_back(RECORD_REMARK_TAG);
+    R.push_back(Tg.getRaw());
+    Bitstream.EmitRecordWithAbbrev(RecordRemarkDebugLocAbbrevID, R);
+  };
+  /*R.clear();*/
+  /*R.push_back(RECORD_REMARK);*/
+  /*Bitstream.EmitRecordWithAbbrev(RecordRemarkAbbrevID, R);*/
   if (LastRemarkPass != Remark.PassName ||
       LastRemarkFunction != Remark.FunctionName) {
     R.clear();
@@ -332,6 +344,10 @@ void BitstreamRemarkSerializerHelper::emitRemark(const Remark &Remark,
 
   if (const std::optional<RemarkLocation> &Loc = Remark.Loc) {
     emitRemarkLoc(*Loc);
+  }
+
+  for (auto& Tg : Remark.Tags) {
+    emitTag(Tg);
   }
 
   if (std::optional<uint64_t> Hotness = Remark.Hotness) {
@@ -356,7 +372,9 @@ void BitstreamRemarkSerializerHelper::emitRemark(const Remark &Remark,
     if (Opc != RECORD_REMARK_ARG_V) {
       R.push_back(StrTab.add(Arg.Key).first);
     }
-    if (Opc == RECORD_REMARK_ARG_KV_INT) {
+    if (Arg.Tag && Arg.Tag->isBlob()) {
+      R.push_back(0);
+    } else if (Opc == RECORD_REMARK_ARG_KV_INT) {
       R.push_back(*MaybeIntVal);
     } else {
       R.push_back(StrTab.add(Arg.Val).first);
@@ -378,6 +396,13 @@ void BitstreamRemarkSerializerHelper::emitRemark(const Remark &Remark,
     Bitstream.EmitRecordWithAbbrev(Abbrev, R);
     if (Arg.Loc) {
       emitRemarkLoc(*Arg.Loc);
+    }
+    if (Arg.Tag) {
+      emitTag(*Arg.Tag);
+      if (Arg.Tag->isBlob()) {
+        R.clear();
+        Bitstream.EmitRecordWithBlob(RecordRemarkBlobAbbrevID, R, Arg.Val);
+      }
     }
   }
 }

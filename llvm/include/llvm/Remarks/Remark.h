@@ -42,6 +42,35 @@ struct RemarkLocation {
 // Create wrappers for C Binding types (see CBindingWrapping.h).
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(RemarkLocation, LLVMRemarkDebugLocRef)
 
+class Tag {
+public:
+  enum Kind {
+    None,
+    Passed,
+    Missed,
+    Failure,
+    FPCommute,
+    Aliasing,
+    Stat,
+    BinaryBlob,
+    StringBlob,
+    FirstCustom,
+    First = Passed,
+    Last = StringBlob,
+  };
+
+  Tag(Kind Val) : Val(Val) {}
+
+  Kind getKind() const { return Val >= FirstCustom ? FirstCustom : Val; }
+
+  uint64_t getRaw() const { return Val; }
+
+  bool isBlob() const { return Val == StringBlob || Val == BinaryBlob; }
+
+private:
+  Kind Val;
+};
+
 /// A key-value pair with a debug location that is used to display the remarks
 /// at the right place in the source.
 struct Argument {
@@ -50,6 +79,7 @@ struct Argument {
   StringRef Val;
   // If set, the debug location corresponding to the value.
   std::optional<RemarkLocation> Loc;
+  std::optional<Tag> Tag;
 
   /// Implement operator<< on Argument.
   LLVM_ABI void print(raw_ostream &OS) const;
@@ -98,6 +128,8 @@ inline StringRef typeToStr(Type Ty) {
 struct Remark {
   /// The type of the remark.
   Type RemarkType = Type::Unknown;
+
+  SmallVector<Tag, 2> Tags;
 
   /// Name of the pass that triggers the emission of this remark.
   StringRef PassName;

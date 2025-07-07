@@ -44,6 +44,7 @@ static Error tryReproducers() {
   auto &Parser = **MaybeParser;
   auto MaybeRemark = Parser.next();
   llvm::DenseMap<StringRef, size_t> Stats;
+  llvm::DenseMap<StringRef, size_t> ModuleIdx;
   size_t I = 0;
   for (; MaybeRemark; MaybeRemark = Parser.next()) {
     Remark &Remark = **MaybeRemark;
@@ -59,9 +60,10 @@ static Error tryReproducers() {
       continue;
     if (Remark.Args.size() != 2)
       return createStringError("Illegal ModuleDump");
+    auto MName = Remark.Args[0].Val;
     std::error_code ErrorCode;
     auto OF = std::make_unique<ToolOutputFile>(
-        (Remark.Args[0].Val + ".ll").str(), ErrorCode, sys::fs::OF_Text);
+        (Twine(MName) + "." + itostr(ModuleIdx[MName]++) + ".ll").str(), ErrorCode, sys::fs::OF_Text);
     if (ErrorCode)
       return errorCodeToError(ErrorCode);
 

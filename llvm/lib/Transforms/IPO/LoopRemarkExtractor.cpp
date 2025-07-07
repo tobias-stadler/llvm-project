@@ -41,9 +41,10 @@ struct LoopExtractionAnalyzer {
   explicit LoopExtractionAnalyzer() {}
 
   bool runOnModule(Module &M);
+  bool runOnFunction(Function &F);
 
 private:
-  bool runOnFunction(Function &F);
+  bool runOnFunctionImpl(Function &F);
 
   Function *extractLoop(Loop *L, LoopInfo &LI, DominatorTree &DT);
   SmallVector<Function *, 16> ExtractedLoopFuncs;
@@ -61,7 +62,7 @@ Function *LoopExtractionAnalyzer::extractLoop(Loop *L, LoopInfo &LI,
   return Extractor.extractCodeRegion(CEAC);
 }
 
-bool LoopExtractionAnalyzer::runOnFunction(Function &F) {
+bool LoopExtractionAnalyzer::runOnFunctionImpl(Function &F) {
   size_t NumSimplified = 0;
   size_t NumIsNotSimplified = 0;
   size_t NumExtracted = 0;
@@ -76,7 +77,7 @@ bool LoopExtractionAnalyzer::runOnFunction(Function &F) {
     return false;
 
   AssumptionCache AC(F);
-  TargetLibraryInfoImpl TLII;
+  TargetLibraryInfoImpl TLII(F.getParent()->getTargetTriple());
   TargetLibraryInfo TLI(TLII);
   ScalarEvolution SE(F, TLI, AC, DT, LI);
   OptimizationRemarkEmitter ORE(&F);
@@ -120,6 +121,46 @@ bool LoopExtractionAnalyzer::runOnFunction(Function &F) {
   return false;
 }
 
+bool LoopExtractionAnalyzer::runOnFunction(Function &F) {
+  if (F.empty())
+    return false;
+  if (!F.getParent())
+    return false;
+
+  std::unique_ptr<Module> ClonedModPtr = CloneModule(*F.getParent());
+  Module &ClonedM = *ClonedModPtr;
+
+  runOnFunctionImpl(*ClonedM.getFunction(F.getName()));
+
+  if (ExtractedLoopFuncs.empty())
+    return false;
+
+  std::vector<GlobalValue *> GVs(ExtractedLoopFuncs.begin(),
+                                 ExtractedLoopFuncs.end());
+
+  ModulePassManager MPM;
+  MPM.addPass(ExtractGVPass(GVs, false));
+  MPM.addPass(StripDeadPrototypesPass());
+  ModuleAnalysisManager MAM;
+  MAM.registerPass([&] { return PassInstrumentationAnalysis(); });
+  MPM.run(ClonedM, MAM);
+
+  /*M.getContext().setDiagnosticsHotnessRequested(true);*/
+
+  StripDebugInfo(ClonedM);
+  OptimizationRemarkEmitter ORE(&F);
+  ORE.emit([&]() {
+    std::string ModuleStr;
+    raw_string_ostream ModuleStrS(ModuleStr);
+    ClonedModPtr->print(ModuleStrS, nullptr);
+    return OptimizationRemarkAnalysis(DEBUG_TYPE, "ModuleDump", &F)
+           << ore::NV("ModuleName", (Twine(ClonedModPtr->getName())).str())
+           << ore::NV("Module", ModuleStr);
+  });
+
+  return false;
+}
+
 bool LoopExtractionAnalyzer::runOnModule(Module &M) {
   if (M.empty())
     return false;
@@ -133,7 +174,7 @@ bool LoopExtractionAnalyzer::runOnModule(Module &M) {
   }
 
   for (auto *F : OriginalFunctions) {
-    runOnFunction(*F);
+    runOnFunctionImpl(*F);
   }
 
   if (ExtractedLoopFuncs.empty())
@@ -177,6 +218,13 @@ bool LoopExtractionAnalyzer::runOnModule(Module &M) {
 PreservedAnalyses LoopRemarkExtractorPass::run(Module &M,
                                                ModuleAnalysisManager &AM) {
   LoopExtractionAnalyzer().runOnModule(M);
+
+  return PreservedAnalyses::all();
+}
+
+PreservedAnalyses LoopRemarkExtractorPass::run(Function &F,
+                                               FunctionAnalysisManager &FAM) {
+  LoopExtractionAnalyzer().runOnFunction(F);
 
   return PreservedAnalyses::all();
 }

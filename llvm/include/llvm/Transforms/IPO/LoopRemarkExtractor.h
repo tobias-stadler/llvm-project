@@ -13,11 +13,10 @@
 
 namespace llvm {
 
-class Module;
-
 class LoopRemarkExtractorPass : public PassInfoMixin<LoopRemarkExtractorPass> {
 public:
-  PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
+  PreservedAnalyses run(Module &M, ModuleAnalysisManager &MAM);
+  PreservedAnalyses run(Function &F, FunctionAnalysisManager &FAM);
 };
 
 } // end namespace llvm

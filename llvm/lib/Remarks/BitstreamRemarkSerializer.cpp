@@ -280,7 +280,7 @@ void BitstreamRemarkSerializerHelper::emitMetaBlock(
 }
 
 void BitstreamRemarkSerializerHelper::enterRemarksBlock() {
-  Bitstream.EnterSubblock(REMARKS_BLOCK_ID, 4);
+  Bitstream.EnterSubblock(REMARKS_BLOCK_ID, 5);
 }
 
 void BitstreamRemarkSerializerHelper::exitRemarksBlock() {
@@ -318,7 +318,7 @@ void BitstreamRemarkSerializerHelper::emitRemark(const Remark &Remark,
     R.clear();
     R.push_back(RECORD_REMARK_TAG);
     R.push_back(Tg.getRaw());
-    Bitstream.EmitRecordWithAbbrev(RecordRemarkDebugLocAbbrevID, R);
+    Bitstream.EmitRecordWithAbbrev(RecordRemarkTagAbbrevID, R);
   };
   /*R.clear();*/
   /*R.push_back(RECORD_REMARK);*/
@@ -372,9 +372,7 @@ void BitstreamRemarkSerializerHelper::emitRemark(const Remark &Remark,
     if (Opc != RECORD_REMARK_ARG_V) {
       R.push_back(StrTab.add(Arg.Key).first);
     }
-    if (Arg.Tag && Arg.Tag->isBlob()) {
-      R.push_back(0);
-    } else if (Opc == RECORD_REMARK_ARG_KV_INT) {
+    if (Opc == RECORD_REMARK_ARG_KV_INT) {
       R.push_back(*MaybeIntVal);
     } else {
       R.push_back(StrTab.add(Arg.Val).first);
@@ -399,10 +397,11 @@ void BitstreamRemarkSerializerHelper::emitRemark(const Remark &Remark,
     }
     if (Arg.Tag) {
       emitTag(*Arg.Tag);
-      if (Arg.Tag->isBlob()) {
-        R.clear();
-        Bitstream.EmitRecordWithBlob(RecordRemarkBlobAbbrevID, R, Arg.Val);
-      }
+    }
+    if (Arg.Blob) {
+      R.clear();
+      R.push_back(RECORD_REMARK_BLOB);
+      Bitstream.EmitRecordWithBlob(RecordRemarkBlobAbbrevID, R, *Arg.Blob);
     }
   }
 }

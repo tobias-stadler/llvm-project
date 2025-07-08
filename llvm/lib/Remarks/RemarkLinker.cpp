@@ -58,6 +58,9 @@ llvm::remarks::getRemarksSectionContents(const object::ObjectFile &Obj) {
 
 Remark &RemarkLinker::keep(std::unique_ptr<Remark> Remark) {
   StrTab.internalize(*Remark);
+  for (auto &Arg : Remark->Args) {
+    Arg.Blob = std::nullopt;
+  }
   auto Inserted = Remarks.insert(std::move(Remark));
   return **Inserted.first;
 }

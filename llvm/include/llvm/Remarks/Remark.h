@@ -19,6 +19,7 @@
 #include "llvm/Support/CBindingWrapping.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/raw_ostream.h"
+#include <cstdint>
 #include <optional>
 #include <string>
 
@@ -60,15 +61,29 @@ public:
   };
 
   Tag(Kind Val) : Val(Val) {}
+  explicit Tag(uint64_t Val) : Val(Val) {}
 
-  Kind getKind() const { return Val >= FirstCustom ? FirstCustom : Val; }
+  Kind getKind() const {
+    return static_cast<Kind>(Val >= FirstCustom ? FirstCustom : Val);
+  }
 
   uint64_t getRaw() const { return Val; }
 
   bool isBlob() const { return Val == StringBlob || Val == BinaryBlob; }
 
+  friend bool operator==(const Tag &LHS, const Tag &RHS) {
+    return LHS.Val == RHS.Val;
+  }
+
+  friend bool operator!=(const Tag &LHS, const Tag &RHS) {
+    return !(LHS == RHS);
+  }
+  friend bool operator<(const Tag &LHS, const Tag &RHS) {
+    return LHS.Val < RHS.Val;
+  }
+
 private:
-  Kind Val;
+  uint32_t Val;
 };
 
 /// A key-value pair with a debug location that is used to display the remarks
@@ -77,9 +92,16 @@ struct Argument {
   StringRef Key;
   // FIXME: We might want to be able to store other types than strings here.
   StringRef Val;
+  std::optional<StringRef> Blob;
   // If set, the debug location corresponding to the value.
   std::optional<RemarkLocation> Loc;
   std::optional<Tag> Tag;
+
+  Argument() = default;
+
+  Argument(StringRef Key, StringRef Val,
+           std::optional<RemarkLocation> Loc = std::nullopt)
+      : Key(Key), Val(Val), Loc(Loc) {}
 
   /// Implement operator<< on Argument.
   LLVM_ABI void print(raw_ostream &OS) const;
@@ -165,6 +187,14 @@ struct Remark {
   /// Implement operator<< on Remark.
   LLVM_ABI void print(raw_ostream &OS) const;
 
+  Argument *getArgByKey(StringRef Key) {
+    for (auto &Arg : Args) {
+      if (Arg.Key == Key)
+        return &Arg;
+    }
+    return nullptr;
+  }
+
 private:
   /// In order to avoid unwanted copies, "delete" the copy constructor.
   /// If a copy is needed, it should be done through `Remark::clone()`.
@@ -207,7 +237,7 @@ inline bool operator<(const RemarkLocation &LHS, const RemarkLocation &RHS) {
 }
 
 inline bool operator==(const Argument &LHS, const Argument &RHS) {
-  return LHS.Key == RHS.Key && LHS.Val == RHS.Val && LHS.Loc == RHS.Loc;
+  return LHS.Key == RHS.Key && LHS.Val == RHS.Val && LHS.Tag == RHS.Tag && LHS.Loc == RHS.Loc;
 }
 
 inline bool operator!=(const Argument &LHS, const Argument &RHS) {
@@ -215,15 +245,16 @@ inline bool operator!=(const Argument &LHS, const Argument &RHS) {
 }
 
 inline bool operator<(const Argument &LHS, const Argument &RHS) {
-  return std::make_tuple(LHS.Key, LHS.Val, LHS.Loc) <
-         std::make_tuple(RHS.Key, RHS.Val, RHS.Loc);
+  return std::make_tuple(LHS.Key, LHS.Val, LHS.Tag, LHS.Loc) <
+         std::make_tuple(RHS.Key, RHS.Val, RHS.Tag, RHS.Loc);
 }
 
 inline bool operator==(const Remark &LHS, const Remark &RHS) {
   return LHS.RemarkType == RHS.RemarkType && LHS.PassName == RHS.PassName &&
          LHS.RemarkName == RHS.RemarkName &&
-         LHS.FunctionName == RHS.FunctionName && LHS.Loc == RHS.Loc &&
-         LHS.Hotness == RHS.Hotness && LHS.Args == RHS.Args;
+         LHS.FunctionName == RHS.FunctionName && LHS.Tags == RHS.Tags &&
+         LHS.Loc == RHS.Loc && LHS.Hotness == RHS.Hotness &&
+         LHS.Args == RHS.Args;
 }
 
 inline bool operator!=(const Remark &LHS, const Remark &RHS) {
@@ -232,9 +263,11 @@ inline bool operator!=(const Remark &LHS, const Remark &RHS) {
 
 inline bool operator<(const Remark &LHS, const Remark &RHS) {
   return std::make_tuple(LHS.RemarkType, LHS.PassName, LHS.RemarkName,
-                         LHS.FunctionName, LHS.Loc, LHS.Hotness, LHS.Args) <
+                         LHS.FunctionName, LHS.Tags, LHS.Loc, LHS.Hotness,
+                         LHS.Args) <
          std::make_tuple(RHS.RemarkType, RHS.PassName, RHS.RemarkName,
-                         RHS.FunctionName, RHS.Loc, RHS.Hotness, RHS.Args);
+                         RHS.FunctionName, LHS.Tags, RHS.Loc, RHS.Hotness,
+                         RHS.Args);
 }
 
 inline raw_ostream &operator<<(raw_ostream &OS, const RemarkLocation &RLoc) {

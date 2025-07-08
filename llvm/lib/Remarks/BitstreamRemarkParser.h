@@ -165,8 +165,10 @@ struct BitstreamRemarksParserHelper
   struct Argument {
     std::optional<uint64_t> KeyIdx;
     std::optional<uint64_t> ValueIdx;
+    std::optional<StringRef> Blob;
     std::optional<RemarkLoc> DbgLoc;
     bool IsInt = false;
+    std::optional<Tag> Tag;
   };
 
   /// The parsed content: depending on the remark, some fields might be empty.
@@ -178,12 +180,14 @@ struct BitstreamRemarksParserHelper
   std::optional<RemarkLoc> DbgLoc;
 
   SmallVector<Argument, 8> Args;
+  SmallVector<Tag, 8> Tags;
 
   ScopeKind CurrScope = ScopeKind::None;
   BlockState State = BlockState::Init;
 
   unsigned RecordID;
   SmallVector<uint64_t, 5> Record;
+  StringRef RecordBlob;
 
   BitstreamRemarksParserHelper(BitstreamCursor &Stream)
       : BitstreamBlockParserHelper(Stream, REMARKS_BLOCK_ID, "REMARKS_BLOCK") {}
@@ -196,13 +200,11 @@ struct BitstreamRemarksParserHelper
   /// This helper does not check for the validity of the fields.
   Error parseNext();
   Error advance();
-  bool isRecordInRemark(unsigned RecordID) {
+
+  bool isRecordBoundary(unsigned RecordID) {
     switch (RecordID) {
-      case RECORD_REMARK_DEBUG_LOC:
-      case RECORD_REMARK_HOTNESS:
-      case RECORD_REMARK_ARG_V:
-      case RECORD_REMARK_ARG_KV:
-      case RECORD_REMARK_ARG_KV_INT:
+      case RECORD_REMARK:
+      case RECORD_REMARK_HEADER:
         return true;
       default:
         return false;

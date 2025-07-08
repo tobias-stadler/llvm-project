@@ -2320,7 +2320,7 @@ bool CallAnalyzer::visitExtractValue(ExtractValueInst &I) {
 
   // Special handling, because we want to simplify extractvalue with a
   // potential insertvalue from the caller.
-  if (Value *SimpleOp = getSimplifiedValueUnchecked(Op)) {
+  if (Value *SimpleOp = getSimplifiedValue<Value>(Op)) {
     SimplifyQuery SQ(DL);
     Value *SimpleV = simplifyExtractValueInst(SimpleOp, I.getIndices(), SQ);
     if (SimpleV) {

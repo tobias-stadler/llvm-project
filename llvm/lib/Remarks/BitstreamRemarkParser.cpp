@@ -192,6 +192,27 @@ Error BitstreamRemarksParserHelper::handleRecord() {
     CurrScope = ScopeKind::Argument;
     break;
   }
+  case RECORD_REMARK_BLOB: {
+    if (Record.size() != 0)
+      return malformedRecord(RemarkTagName);
+    if (CurrScope != ScopeKind::Argument || !Args.size() || Args.back().Blob)
+      return unexpectedRecord(RemarkTagName);
+    Args.back().Blob = RecordBlob;
+    break;
+  }
+  case RECORD_REMARK_TAG: {
+    if (Record.size() != 1)
+      return malformedRecord(RemarkTagName);
+    if (CurrScope == ScopeKind::Remark) {
+      Tags.push_back(Tag(Record[0]));
+      break;
+    }
+    if (CurrScope == ScopeKind::Argument) {
+      Args.back().Tag = Tag(Record[0]);
+      break;
+    }
+    return unexpectedRecord(RemarkTagName);
+  }
   default:
     return unknownRecord(RecordID);
   }
@@ -215,7 +236,7 @@ Error BitstreamRemarksParserHelper::advance() {
     case BitstreamEntry::Record: {
       Record.clear();
       Expected<unsigned> MaybeRecordID =
-          Stream.readRecord(Next->ID, Record, nullptr);
+          Stream.readRecord(Next->ID, Record, &RecordBlob);
       if (!MaybeRecordID)
         return MaybeRecordID.takeError();
       RecordID = *MaybeRecordID;
@@ -224,7 +245,7 @@ Error BitstreamRemarksParserHelper::advance() {
         State = BlockState::InRemark;
         return Error::success();
       }
-      if (State == BlockState::InRemark && !isRecordInRemark(RecordID)) {
+      if (State == BlockState::InRemark && isRecordBoundary(RecordID)) {
         State = BlockState::BetweenRemarks;
         return Error::success();
       }
@@ -260,6 +281,7 @@ Error BitstreamRemarksParserHelper::parseNext() {
   Hotness.reset();
   DbgLoc.reset();
   Args.clear();
+  Tags.clear();
   CurrScope = ScopeKind::None;
   if (Error E = handleRecord())
     return E;
@@ -572,6 +594,12 @@ Expected<std::unique_ptr<Remark>> BitstreamRemarkParser::processRemark() {
       } else
         return SourceFileName.takeError();
     }
+
+    if (Arg.Tag)
+      R.Args.back().Tag = Arg.Tag;
+
+    if (Arg.Blob)
+      R.Args.back().Blob = Arg.Blob;
   }
 
   return std::move(Result);

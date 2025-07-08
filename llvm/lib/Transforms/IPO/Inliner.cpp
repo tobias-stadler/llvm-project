@@ -459,6 +459,7 @@ PreservedAnalyses InlinerPass::run(LazyCallGraph::SCC &InitialC,
                              }),
               Calls.end());
 
+          Advice->recordInliningWithCalleeDeleted();
           // Clear the body and queue the function itself for call graph
           // updating when we finish inlining.
           makeFunctionBodyUnreachable(Callee);
@@ -470,9 +471,7 @@ PreservedAnalyses InlinerPass::run(LazyCallGraph::SCC &InitialC,
           DeadFunctionsInComdats.push_back(&Callee);
         }
       }
-      if (CalleeWasDeleted)
-        Advice->recordInliningWithCalleeDeleted();
-      else
+      if (!CalleeWasDeleted)
         Advice->recordInlining();
     }
 

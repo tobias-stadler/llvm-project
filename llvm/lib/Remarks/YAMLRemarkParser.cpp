@@ -344,6 +344,7 @@ Expected<Argument> YAMLRemarkParser::parseArg(yaml::Node &Node) {
 
   std::optional<StringRef> KeyStr;
   std::optional<StringRef> ValueStr;
+  std::optional<StringRef> BlobStr;
   std::optional<RemarkLocation> Loc;
 
   for (yaml::KeyValueNode &ArgEntry : *ArgMap) {
@@ -364,6 +365,13 @@ Expected<Argument> YAMLRemarkParser::parseArg(yaml::Node &Node) {
         continue;
       } else
         return MaybeLoc.takeError();
+    } else if (KeyName == "Blob") {
+      if (BlobStr)
+        return error("only one Blob entry is allowed per argument.", ArgEntry);
+      if (Expected<StringRef> MaybeStr = parseStr(ArgEntry))
+        BlobStr = *MaybeStr;
+      else
+        return MaybeStr.takeError();
     }
 
     // If we already have a string, error out.
@@ -385,7 +393,12 @@ Expected<Argument> YAMLRemarkParser::parseArg(yaml::Node &Node) {
   if (!ValueStr)
     return error("argument value is missing.", *ArgMap);
 
-  return Argument{*KeyStr, *ValueStr, Loc};
+  Argument Arg;
+  Arg.Key = *KeyStr;
+  Arg.Val = *ValueStr;
+  Arg.Blob = BlobStr;
+  Arg.Loc = Loc;
+  return Arg;
 }
 
 Expected<std::unique_ptr<Remark>> YAMLRemarkParser::next() {

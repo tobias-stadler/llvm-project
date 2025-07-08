@@ -77,12 +77,19 @@ LLVMRemarkStreamer::toRemark(const DiagnosticInfoOptimizationBase &Diag) {
 
     if (Arg.ModuleDump) {
       BCBuf.clear();
-      BitcodeWriter BCWrite(BCBuf);
-      BCWrite.writeModule(*Arg.ModuleDump);
-      BCWrite.writeSymtab();
-      BCWrite.writeStrtab();
-      R.Args.back().Val = {BCBuf.data(), BCBuf.size()};
-      R.Args.back().Tag = remarks::Tag::BinaryBlob;
+      if (false) {
+        BitcodeWriter BCWrite(BCBuf);
+        BCWrite.writeModule(*Arg.ModuleDump);
+        BCWrite.writeSymtab();
+        BCWrite.writeStrtab();
+        R.Args.back().Blob = {BCBuf.data(), BCBuf.size()};
+        R.Args.back().Tag = remarks::Tag::BinaryBlob;
+      } else {
+        raw_svector_ostream ModuleStrS(BCBuf);
+        Arg.ModuleDump->print(ModuleStrS, nullptr);
+        R.Args.back().Blob = {BCBuf.data(), BCBuf.size()};
+        R.Args.back().Tag = remarks::Tag::StringBlob;
+      }
     }
   }
 

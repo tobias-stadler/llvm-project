@@ -531,7 +531,7 @@ public:
     Argument(StringRef Key, bool B) : Key(Key), Val(B ? "true" : "false") {}
     LLVM_ABI Argument(StringRef Key, DebugLoc dl);
     LLVM_ABI Argument(StringRef Key, InstructionCost C);
-    LLVM_ABI Argument(StringRef Key, const Module* M);
+    LLVM_ABI Argument(StringRef Key, StringRef Value, const Module* M);
   };
 
   /// \p PassName is the name of the pass emitting this diagnostic. \p

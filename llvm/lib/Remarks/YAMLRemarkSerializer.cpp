@@ -121,6 +121,7 @@ template <> struct MappingTraits<Argument> {
       io.mapRequired(A.Key.data(), A.Val);
     }
     io.mapOptional("DebugLoc", A.Loc);
+    io.mapOptional("Blob", A.Blob);
   }
 };
 

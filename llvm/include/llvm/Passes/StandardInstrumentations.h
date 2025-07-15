@@ -515,6 +515,21 @@ private:
   void runAfterPass();
 };
 
+class StatsRemarkInstrumention {
+public:
+  LLVM_ABI StatsRemarkInstrumention();
+  // We intend this to be unique per-compilation, thus no copies.
+  StatsRemarkInstrumention(const StatsRemarkInstrumention &) = delete;
+  void operator=(const StatsRemarkInstrumention &) = delete;
+
+  LLVM_ABI void registerCallbacks(PassInstrumentationCallbacks &PIC);
+
+private:
+  // Implementation of pass instrumentation callbacks.
+  void runBeforePass(StringRef PassID, Any IR);
+  void runAfterPass(StringRef PassID, Any IR);
+};
+
 // Class that holds transitions between basic blocks.  The transitions
 // are contained in a map of values to names of basic blocks.
 class DCData {
@@ -628,6 +643,7 @@ class StandardInstrumentations {
   IRChangedTester ChangeTester;
   VerifyInstrumentation Verify;
   DroppedVariableStatsIR DroppedStatsIR;
+  StatsRemarkInstrumention StatsRemark;
 
   bool VerifyEach;
 

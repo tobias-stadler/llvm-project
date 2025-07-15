@@ -14,6 +14,7 @@
 
 #include "llvm/Passes/StandardInstrumentations.h"
 #include "llvm/ADT/Any.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Analysis/LazyCallGraph.h"
 #include "llvm/Analysis/LoopInfo.h"
@@ -23,12 +24,15 @@
 #include "llvm/CodeGen/MachineVerifier.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/LLVMRemarkStreamer.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/PassInstrumentation.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/IR/PrintPasses.h"
 #include "llvm/IR/StructuralHash.h"
 #include "llvm/IR/Verifier.h"
+#include "llvm/Remarks/Remark.h"
+#include "llvm/Remarks/RemarkStreamer.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Error.h"
@@ -194,6 +198,44 @@ const Module *unwrapModule(Any IR, bool Force = false) {
     if (!Force && !isFunctionInPrintList(MF->getName()))
       return nullptr;
     return MF->getFunction().getParent();
+  }
+
+  llvm_unreachable("Unknown IR unit");
+}
+
+const Function *unwrapFunction(Any IR, bool Force) {
+  if (const auto *M = unwrapIR<Module>(IR))
+    return nullptr;
+
+  if (const auto *F = unwrapIR<Function>(IR)) {
+    if (!Force && !isFunctionInPrintList(F->getName()))
+      return nullptr;
+
+    return F;
+  }
+
+  if (const auto *C = unwrapIR<LazyCallGraph::SCC>(IR)) {
+    for (const LazyCallGraph::Node &N : *C) {
+      const Function &F = N.getFunction();
+      if (Force || (!F.isDeclaration() && isFunctionInPrintList(F.getName()))) {
+        return &F;
+      }
+    }
+    assert(!Force && "Expected a module");
+    return nullptr;
+  }
+
+  if (const auto *L = unwrapIR<Loop>(IR)) {
+    const Function *F = L->getHeader()->getParent();
+    if (!Force && !isFunctionInPrintList(F->getName()))
+      return nullptr;
+    return F;
+  }
+
+  if (const auto *MF = unwrapIR<MachineFunction>(IR)) {
+    if (!Force && !isFunctionInPrintList(MF->getName()))
+      return nullptr;
+    return &MF->getFunction();
   }
 
   llvm_unreachable("Unknown IR unit");
@@ -1590,6 +1632,54 @@ void TimeProfilingPassesHandler::runBeforePass(StringRef PassID, Any IR) {
 
 void TimeProfilingPassesHandler::runAfterPass() { timeTraceProfilerEnd(); }
 
+StatsRemarkInstrumention::StatsRemarkInstrumention() {}
+
+void StatsRemarkInstrumention::registerCallbacks(
+    PassInstrumentationCallbacks &PIC) {
+  if (!AreStatisticsEnabled())
+    return;
+  PIC.registerBeforeNonSkippedPassCallback(
+      [this](StringRef P, Any IR) { this->runBeforePass(P, IR); });
+  PIC.registerAfterPassCallback(
+      [this](StringRef P, Any IR, const PreservedAnalyses &) {
+        this->runAfterPass(P, IR);
+      },
+      true);
+  /*PIC.registerAfterPassInvalidatedCallback(*/
+  /*    [this](StringRef P, const PreservedAnalyses &) { this->runAfterPass(P,
+   * IR); },*/
+  /*    true);*/
+  PIC.registerBeforeAnalysisCallback(
+      [this](StringRef P, Any IR) { this->runBeforePass(P, IR); });
+  PIC.registerAfterAnalysisCallback(
+      [this](StringRef P, Any IR) { this->runAfterPass(P, IR); }, true);
+}
+
+void StatsRemarkInstrumention::runBeforePass(StringRef PassID, Any IR) {
+  ResetStatistics();
+}
+
+void StatsRemarkInstrumention::runAfterPass(StringRef PassID, Any IR) {
+  auto Stats = GetStatistics();
+  if (Stats.empty())
+    return;
+  PrintStatistics(dbgs());
+  const Function *F = unwrapFunction(IR, true);
+  if (!F || !F->getContext().getLLVMRemarkStreamer())
+    return;
+  remarks::Remark R;
+  R.PassName = PassID;
+  R.RemarkName = "PassStatistics";
+  R.FunctionName = F->getName();
+  R.RemarkType = remarks::Type::Analysis;
+  R.Tags.push_back(remarks::Tag::Statistics);
+  remarks::StringTable Str;
+  for (auto &Stat : Stats) {
+    R.Args.emplace_back(Stat.first, Str.add(itostr(Stat.second)).second);
+  }
+  F->getContext().getMainRemarkStreamer()->getSerializer().emit(R);
+}
+
 namespace {
 
 class DisplayNode;
@@ -2522,6 +2612,7 @@ void StandardInstrumentations::registerCallbacks(
   ChangeTester.registerCallbacks(PIC);
   PrintCrashIR.registerCallbacks(PIC);
   DroppedStatsIR.registerCallbacks(PIC);
+  StatsRemark.registerCallbacks(PIC);
   if (MAM)
     PreservedCFGChecker.registerCallbacks(PIC, *MAM);
 

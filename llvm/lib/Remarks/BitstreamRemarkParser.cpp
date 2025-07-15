@@ -567,6 +567,8 @@ Expected<std::unique_ptr<Remark>> BitstreamRemarkParser::processRemark() {
   if (Helper.Blob)
     R.Blob = Helper.Blob;
 
+  R.Tags.append(Helper.Tags);
+
   for (const BitstreamRemarksParserHelper::Argument &Arg : Helper.Args) {
     if (!Arg.ValueIdx)
       return Helper.error("Missing value in remark argument.");

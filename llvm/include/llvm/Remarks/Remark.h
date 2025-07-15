@@ -52,7 +52,7 @@ public:
     Failure,
     FPCommute,
     Aliasing,
-    Statistic,
+    Statistics,
     GenericBinaryBlob,
     BitCodeBlob,
     IRBlob,
@@ -92,8 +92,8 @@ public:
       return "FPCommute";
     case Aliasing:
       return "Aliasing";
-    case Statistic:
-      return "Stat";
+    case Statistics:
+      return "Stats";
     case GenericBinaryBlob:
       return "GenericBinaryBlob";
     case BitCodeBlob:

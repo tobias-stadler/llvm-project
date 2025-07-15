@@ -195,9 +195,9 @@ Error BitstreamRemarksParserHelper::handleRecord() {
   case RECORD_REMARK_BLOB: {
     if (Record.size() != 0)
       return malformedRecord(RemarkTagName);
-    if (CurrScope != ScopeKind::Argument || !Args.size() || Args.back().Blob)
+    if (CurrScope != ScopeKind::Remark)
       return unexpectedRecord(RemarkTagName);
-    Args.back().Blob = RecordBlob;
+    Blob = RecordBlob;
     break;
   }
   case RECORD_REMARK_TAG: {
@@ -280,6 +280,7 @@ Error BitstreamRemarksParserHelper::parseNext() {
   /*FunctionNameIdx.reset();*/
   Hotness.reset();
   DbgLoc.reset();
+  Blob.reset();
   Args.clear();
   Tags.clear();
   CurrScope = ScopeKind::None;
@@ -563,6 +564,9 @@ Expected<std::unique_ptr<Remark>> BitstreamRemarkParser::processRemark() {
   if (Helper.Hotness)
     R.Hotness = *Helper.Hotness;
 
+  if (Helper.Blob)
+    R.Blob = Helper.Blob;
+
   for (const BitstreamRemarksParserHelper::Argument &Arg : Helper.Args) {
     if (!Arg.ValueIdx)
       return Helper.error("Missing value in remark argument.");
@@ -595,11 +599,7 @@ Expected<std::unique_ptr<Remark>> BitstreamRemarkParser::processRemark() {
         return SourceFileName.takeError();
     }
 
-    if (Arg.Tag)
-      R.Args.back().Tag = Arg.Tag;
-
-    if (Arg.Blob)
-      R.Args.back().Blob = Arg.Blob;
+    R.Args.back().Tag = Arg.Tag;
   }
 
   return std::move(Result);

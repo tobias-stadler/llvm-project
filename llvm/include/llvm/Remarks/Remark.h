@@ -14,6 +14,7 @@
 #define LLVM_REMARKS_REMARK_H
 
 #include "llvm-c/Remarks.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/CBindingWrapping.h"
@@ -46,22 +47,22 @@ DEFINE_SIMPLE_CONVERSION_FUNCTIONS(RemarkLocation, LLVMRemarkDebugLocRef)
 class Tag {
 public:
   enum Kind {
-    None,
     Passed,
     Missed,
     Failure,
     FPCommute,
     Aliasing,
-    Stat,
-    BinaryBlob,
-    StringBlob,
+    Statistic,
+    GenericBinaryBlob,
+    BitCodeBlob,
+    IRBlob,
     FirstCustom,
     First = Passed,
-    Last = StringBlob,
+    Last = IRBlob,
   };
 
-  Tag(Kind Val) : Val(Val) {}
-  explicit Tag(uint64_t Val) : Val(Val) {}
+  constexpr Tag(Kind Val) : Val(Val) {}
+  constexpr explicit Tag(uint64_t Val) : Val(Val) {}
 
   Kind getKind() const {
     return static_cast<Kind>(Val >= FirstCustom ? FirstCustom : Val);
@@ -69,7 +70,40 @@ public:
 
   uint64_t getRaw() const { return Val; }
 
-  bool isBlob() const { return Val == StringBlob || Val == BinaryBlob; }
+  bool isBinaryBlob() const {
+    switch (Val) {
+    case GenericBinaryBlob:
+    case BitCodeBlob:
+      return true;
+    default:
+      return false;
+    }
+  }
+
+  StringRef getName() {
+    switch (Val) {
+    case Passed:
+      return "Passed";
+    case Missed:
+      return "Missed";
+    case Failure:
+      return "Failure";
+    case FPCommute:
+      return "FPCommute";
+    case Aliasing:
+      return "Aliasing";
+    case Statistic:
+      return "Stat";
+    case GenericBinaryBlob:
+      return "GenericBinaryBlob";
+    case BitCodeBlob:
+      return "BitCodeBlob";
+    case IRBlob:
+      return "IRBlob";
+    default:
+      return "Invalid";
+    }
+  }
 
   friend bool operator==(const Tag &LHS, const Tag &RHS) {
     return LHS.Val == RHS.Val;
@@ -92,7 +126,6 @@ struct Argument {
   StringRef Key;
   // FIXME: We might want to be able to store other types than strings here.
   StringRef Val;
-  std::optional<StringRef> Blob;
   // If set, the debug location corresponding to the value.
   std::optional<RemarkLocation> Loc;
   std::optional<Tag> Tag;
@@ -174,6 +207,8 @@ struct Remark {
   /// Arguments collected via the streaming interface.
   SmallVector<Argument, 5> Args;
 
+  std::optional<StringRef> Blob;
+
   Remark() = default;
   Remark(Remark &&) = default;
   Remark &operator=(Remark &&) = default;
@@ -193,6 +228,21 @@ struct Remark {
         return &Arg;
     }
     return nullptr;
+  }
+
+  bool hasTag(Tag TheTag) {
+    auto *It = find(Tags, TheTag);
+    return It != Tags.end();
+  }
+
+  std::optional<Tag> hasTag(std::initializer_list<Tag> TheTags) {
+    for (auto Tg : Tags) {
+      for (Tag TheTag : TheTags) {
+        if (Tg == TheTag)
+          return Tg;
+      }
+    }
+    return std::nullopt;
   }
 
 private:

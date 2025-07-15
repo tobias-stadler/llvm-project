@@ -14,6 +14,7 @@
 #include "RemarkUtilRegistry.h"
 
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/Debug.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/Regex.h"
 
@@ -45,7 +46,6 @@ static Error tryReproducers() {
   auto MaybeRemark = Parser.next();
   llvm::DenseMap<StringRef, size_t> Stats;
   llvm::DenseMap<StringRef, size_t> ModuleIdx;
-  size_t I = 0;
   for (; MaybeRemark; MaybeRemark = Parser.next()) {
     Remark &Remark = **MaybeRemark;
     if (Remark.RemarkName == "FuncStats") {
@@ -56,21 +56,30 @@ static Error tryReproducers() {
         Stats[Arg.Key] += *Val;
       }
     }
-    if (Remark.RemarkName != "ModuleDump")
+    if (!Remark.Blob)
       continue;
-    if (Remark.Args.size() != 2)
-      return createStringError("Illegal ModuleDump");
-    auto MName = Remark.Args[0].Val;
+    auto Name = Remark.RemarkName;
+    auto NameIdx = ModuleIdx[Name]++;
+    StringRef Ext = ".txt";
+    if (Remark.hasTag(remarks::Tag::BitCodeBlob)) {
+      Ext = ".bc";
+    } else if (Remark.hasTag(remarks::Tag::IRBlob)) {
+      Ext = ".ll";
+    } else if (Remark.hasTag(remarks::Tag::GenericBinaryBlob)) {
+      Ext = ".blob";
+   }
     std::error_code ErrorCode;
-    auto OF = std::make_unique<ToolOutputFile>(
-        (Twine(MName) + "." + itostr(ModuleIdx[MName]++) + ".ll").str(), ErrorCode, sys::fs::OF_Text);
+    std::string DumpFile =
+        (Twine(Name) + (NameIdx != 0 ? "." + Twine(itostr(NameIdx)) : Twine()) +
+         Ext)
+            .str();
+    auto OF =
+        std::make_unique<ToolOutputFile>(DumpFile, ErrorCode, sys::fs::OF_Text);
     if (ErrorCode)
       return errorCodeToError(ErrorCode);
 
-    OF->os() << Remark.Args[1].Val;
-
+    OF->os() << *Remark.Blob;
     OF->keep();
-    ++I;
   }
   for (auto &Stat : Stats) {
     OF->os() << Stat.getFirst() << ": " << Stat.getSecond() << "\n";

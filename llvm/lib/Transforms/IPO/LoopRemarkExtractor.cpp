@@ -151,8 +151,7 @@ bool LoopExtractionAnalyzer::runOnFunction(Function &F) {
   OptimizationRemarkEmitter ORE(&F);
   ORE.emit([&]() {
     return OptimizationRemarkAnalysis(DEBUG_TYPE, "ModuleDump", &F)
-           << ore::NV("ModuleName", (Twine(ClonedModPtr->getName())).str())
-           << ore::NV("ModuleDump", "loop", &ClonedM);
+           << ore::NV("LoopIR", ClonedModPtr->getName().str(), &ClonedM);
   });
 
   return false;

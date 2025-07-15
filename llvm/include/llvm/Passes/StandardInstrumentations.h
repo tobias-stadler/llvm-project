@@ -255,6 +255,22 @@ protected:
   const bool VerboseMode;
 };
 
+template <typename IRUnitT>
+class LLVM_ABI IRChangedExtractor : public ChangeReporter<IRUnitT> {
+  IRChangedExtractor();
+
+  // Print a module dump of the first IR that is changed.
+  void handleInitialIR(Any IR) override;
+  // Report that the IR was omitted because it did not change.
+  void omitAfter(StringRef PassID, std::string &Name) override;
+  // Report that the pass was invalidated.
+  void handleInvalidated(StringRef PassID) override;
+  // Report that the IR was filtered out.
+  void handleFiltered(StringRef PassID, std::string &Name) override;
+  // Report that the pass was ignored.
+  void handleIgnored(StringRef PassID, std::string &Name) override;
+};
+
 // An abstract template base class that handles printing banners and
 // reporting when things have not changed or are filtered out.
 template <typename IRUnitT>

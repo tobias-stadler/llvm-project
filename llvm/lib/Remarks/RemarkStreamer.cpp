@@ -58,3 +58,7 @@ bool RemarkStreamer::needsSection() const {
   assert(EnableRemarksSection == cl::BOU_UNSET);
   return RemarkSerializer->SerializerFormat == Format::Bitstream;
 }
+
+bool RemarkStreamer::shouldEmitBinaryBlobs() const {
+  return RemarkSerializer->SerializerFormat == Format::Bitstream;
+}

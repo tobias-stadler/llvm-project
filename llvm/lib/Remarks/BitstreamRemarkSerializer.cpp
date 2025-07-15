@@ -280,7 +280,7 @@ void BitstreamRemarkSerializerHelper::emitMetaBlock(
 }
 
 void BitstreamRemarkSerializerHelper::enterRemarksBlock() {
-  Bitstream.EnterSubblock(REMARKS_BLOCK_ID, 5);
+  Bitstream.EnterSubblock(REMARKS_BLOCK_ID, 4);
 }
 
 void BitstreamRemarkSerializerHelper::exitRemarksBlock() {
@@ -357,6 +357,12 @@ void BitstreamRemarkSerializerHelper::emitRemark(const Remark &Remark,
     Bitstream.EmitRecordWithAbbrev(RecordRemarkHotnessAbbrevID, R);
   }
 
+  if (Remark.Blob) {
+    R.clear();
+    R.push_back(RECORD_REMARK_BLOB);
+    Bitstream.EmitRecordWithBlob(RecordRemarkBlobAbbrevID, R, *Remark.Blob);
+  }
+
   for (const Argument &Arg : Remark.Args) {
     R.clear();
     auto MaybeIntVal = Arg.getValAsInt();
@@ -397,11 +403,6 @@ void BitstreamRemarkSerializerHelper::emitRemark(const Remark &Remark,
     }
     if (Arg.Tag) {
       emitTag(*Arg.Tag);
-    }
-    if (Arg.Blob) {
-      R.clear();
-      R.push_back(RECORD_REMARK_BLOB);
-      Bitstream.EmitRecordWithBlob(RecordRemarkBlobAbbrevID, R, *Arg.Blob);
     }
   }
 }

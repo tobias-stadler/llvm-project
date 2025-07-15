@@ -165,7 +165,6 @@ struct BitstreamRemarksParserHelper
   struct Argument {
     std::optional<uint64_t> KeyIdx;
     std::optional<uint64_t> ValueIdx;
-    std::optional<StringRef> Blob;
     std::optional<RemarkLoc> DbgLoc;
     bool IsInt = false;
     std::optional<Tag> Tag;
@@ -178,6 +177,7 @@ struct BitstreamRemarksParserHelper
   std::optional<uint64_t> FunctionNameIdx;
   std::optional<uint64_t> Hotness;
   std::optional<RemarkLoc> DbgLoc;
+  std::optional<StringRef> Blob;
 
   SmallVector<Argument, 8> Args;
   SmallVector<Tag, 8> Tags;

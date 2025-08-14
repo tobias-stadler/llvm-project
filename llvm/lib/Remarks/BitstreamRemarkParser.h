@@ -45,8 +45,13 @@ public:
 public:
   template <typename... Ts> Error error(char const *Fmt, const Ts &...Vals) {
     std::string Buffer;
-    raw_string_ostream(Buffer)
-        << "Error while parsing " << BlockName << ": " << format(Fmt, Vals...);
+    raw_string_ostream OS(Buffer);
+    OS << "Error while parsing " << BlockName << ": ";
+    if constexpr (sizeof...(Vals) == 0) {
+      OS << Fmt;
+    } else {
+      OS << format(Fmt, Vals...);
+    }
     return make_error<StringError>(
         Buffer, std::make_error_code(std::errc::illegal_byte_sequence));
   }
@@ -201,7 +206,7 @@ struct BitstreamRemarksParserHelper
   Error parseNext();
   Error advance();
 
-  bool isRecordBoundary(unsigned RecordID) {
+  bool isRemarkBoundary(unsigned RecordID) {
     switch (RecordID) {
       case RECORD_REMARK:
       case RECORD_REMARK_HEADER:

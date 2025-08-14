@@ -515,12 +515,12 @@ private:
   void runAfterPass();
 };
 
-class StatsRemarkInstrumention {
+class LocalStatsInstrumentation {
 public:
-  LLVM_ABI StatsRemarkInstrumention();
+  LLVM_ABI LocalStatsInstrumentation();
   // We intend this to be unique per-compilation, thus no copies.
-  StatsRemarkInstrumention(const StatsRemarkInstrumention &) = delete;
-  void operator=(const StatsRemarkInstrumention &) = delete;
+  LocalStatsInstrumentation(const LocalStatsInstrumentation &) = delete;
+  void operator=(const LocalStatsInstrumentation &) = delete;
 
   LLVM_ABI void registerCallbacks(PassInstrumentationCallbacks &PIC);
 
@@ -643,7 +643,7 @@ class StandardInstrumentations {
   IRChangedTester ChangeTester;
   VerifyInstrumentation Verify;
   DroppedVariableStatsIR DroppedStatsIR;
-  StatsRemarkInstrumention StatsRemark;
+  LocalStatsInstrumentation StatsRemark;
 
   bool VerifyEach;
 

@@ -41,7 +41,8 @@ using namespace llvm;
 
 #define DEBUG_TYPE "clone-function"
 
-STATISTIC(RemappedAtomMax, "Highest global NextAtomGroup (after mapping)");
+GLOBAL_STATISTIC(RemappedAtomMax,
+                 "Highest global NextAtomGroup (after mapping)");
 
 void llvm::mapAtomInstance(const DebugLoc &DL, ValueToValueMapTy &VMap) {
   auto CurGroup = DL->getAtomGroup();

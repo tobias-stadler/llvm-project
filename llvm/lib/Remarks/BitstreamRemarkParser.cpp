@@ -93,6 +93,8 @@ Error BitstreamMetaParserHelper::parseRecord(unsigned Code) {
     if (Record.size() != 1)
       return malformedRecord(MetaRemarkVersionName);
     RemarkVersion = Record[0];
+    // Error immediately if remark version is outdated, so the user sees an
+    // explanation instead of a parser error.
     if (*RemarkVersion != CurrentRemarkVersion) {
       return createStringError(
           std::make_error_code(std::errc::illegal_byte_sequence),
@@ -204,11 +206,11 @@ Error BitstreamRemarksParserHelper::handleRecord() {
     if (Record.size() != 1)
       return malformedRecord(RemarkTagName);
     if (CurrScope == ScopeKind::Remark) {
-      Tags.push_back(Tag(Record[0]));
+      Tags.push_back(Tag::fromRaw(Record[0]));
       break;
     }
     if (CurrScope == ScopeKind::Argument) {
-      Args.back().Tag = Tag(Record[0]);
+      Args.back().Tag = Tag::fromRaw(Record[0]);
       break;
     }
     return unexpectedRecord(RemarkTagName);
@@ -245,7 +247,7 @@ Error BitstreamRemarksParserHelper::advance() {
         State = BlockState::InRemark;
         return Error::success();
       }
-      if (State == BlockState::InRemark && isRecordBoundary(RecordID)) {
+      if (State == BlockState::InRemark && isRemarkBoundary(RecordID)) {
         State = BlockState::BetweenRemarks;
         return Error::success();
       }
@@ -489,6 +491,9 @@ Error BitstreamRemarkParser::processExternalFilePath() {
   if (std::error_code EC = BufferOrErr.getError())
     return createFileError(FullPath, EC);
 
+  // FIXME
+  /*if (TmpRemarkBuffer)*/
+  /*  return error("");*/
   TmpRemarkBuffer = std::move(*BufferOrErr);
 
   // Don't try to parse the file if it's empty.
@@ -567,7 +572,7 @@ Expected<std::unique_ptr<Remark>> BitstreamRemarkParser::processRemark() {
   if (Helper.Blob)
     R.Blob = Helper.Blob;
 
-  R.Tags.append(Helper.Tags);
+  R.Tags.insert_range(Helper.Tags);
 
   for (const BitstreamRemarksParserHelper::Argument &Arg : Helper.Args) {
     if (!Arg.ValueIdx)

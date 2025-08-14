@@ -61,13 +61,13 @@ static Error tryReproducers() {
     auto Name = Remark.RemarkName;
     auto NameIdx = ModuleIdx[Name]++;
     StringRef Ext = ".txt";
-    if (Remark.hasTag(remarks::Tag::BitCodeBlob)) {
+    if (Remark.Tags.contains(remarks::Tag::BitCodeBlob)) {
       Ext = ".bc";
-    } else if (Remark.hasTag(remarks::Tag::IRBlob)) {
+    } else if (Remark.Tags.contains(remarks::Tag::IRBlob)) {
       Ext = ".ll";
-    } else if (Remark.hasTag(remarks::Tag::GenericBinaryBlob)) {
+    } else if (Remark.Tags.contains(remarks::Tag::GenericBinaryBlob)) {
       Ext = ".blob";
-   }
+    }
     std::error_code ErrorCode;
     std::string DumpFile =
         (Twine(Name) + (NameIdx != 0 ? "." + Twine(itostr(NameIdx)) : Twine()) +

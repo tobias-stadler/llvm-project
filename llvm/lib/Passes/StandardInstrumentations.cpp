@@ -1632,9 +1632,9 @@ void TimeProfilingPassesHandler::runBeforePass(StringRef PassID, Any IR) {
 
 void TimeProfilingPassesHandler::runAfterPass() { timeTraceProfilerEnd(); }
 
-StatsRemarkInstrumention::StatsRemarkInstrumention() {}
+LocalStatsInstrumentation::LocalStatsInstrumentation() {}
 
-void StatsRemarkInstrumention::registerCallbacks(
+void LocalStatsInstrumentation::registerCallbacks(
     PassInstrumentationCallbacks &PIC) {
   if (!AreStatisticsEnabled())
     return;
@@ -1655,29 +1655,31 @@ void StatsRemarkInstrumention::registerCallbacks(
       [this](StringRef P, Any IR) { this->runAfterPass(P, IR); }, true);
 }
 
-void StatsRemarkInstrumention::runBeforePass(StringRef PassID, Any IR) {
-  ResetStatistics();
+void LocalStatsInstrumentation::runBeforePass(StringRef PassID, Any IR) {
+  ResetLocalStatistics();
 }
 
-void StatsRemarkInstrumention::runAfterPass(StringRef PassID, Any IR) {
-  auto Stats = GetStatistics();
+void LocalStatsInstrumentation::runAfterPass(StringRef PassID, Any IR) {
+  auto Stats = GetLocalStatistics();
   if (Stats.empty())
     return;
-  PrintStatistics(dbgs());
+  // PrintStatistics(dbgs());
   const Function *F = unwrapFunction(IR, true);
   if (!F || !F->getContext().getLLVMRemarkStreamer())
     return;
-  remarks::Remark R;
-  R.PassName = PassID;
-  R.RemarkName = "PassStatistics";
-  R.FunctionName = F->getName();
-  R.RemarkType = remarks::Type::Analysis;
-  R.Tags.push_back(remarks::Tag::Statistics);
   remarks::StringTable Str;
-  for (auto &Stat : Stats) {
-    R.Args.emplace_back(Stat.first, Str.add(itostr(Stat.second)).second);
+  for (auto &E : Stats) {
+    remarks::Remark R;
+    R.PassName = E.first;
+    R.RemarkName = "PassStatistics";
+    R.FunctionName = F->getName();
+    R.RemarkType = remarks::Type::Analysis;
+    R.Tags.insert(remarks::Tag::Statistics);
+    for (auto &Stat : E.second) {
+      R.Args.emplace_back(Stat.first, Str.add(itostr(Stat.second)).second);
+    }
+    F->getContext().getMainRemarkStreamer()->getSerializer().emit(R);
   }
-  F->getContext().getMainRemarkStreamer()->getSerializer().emit(R);
 }
 
 namespace {

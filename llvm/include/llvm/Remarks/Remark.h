@@ -15,11 +15,13 @@
 
 #include "llvm-c/Remarks.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/CBindingWrapping.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/raw_ostream.h"
+#include <cassert>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -45,27 +47,43 @@ struct RemarkLocation {
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(RemarkLocation, LLVMRemarkDebugLocRef)
 
 class Tag {
+  uint64_t Val;
+
+  constexpr explicit Tag(uint64_t Val) : Val(Val) {}
+
 public:
   enum Kind {
     Passed,
     Missed,
     Failure,
-    FPCommute,
-    Aliasing,
     Statistics,
     GenericBinaryBlob,
     BitCodeBlob,
     IRBlob,
-    FirstCustom,
-    First = Passed,
-    Last = IRBlob,
+    FPCommute,
+    Aliasing,
+    Custom,
+    FirstBuiltin = Passed,
+    LastBuiltin = Custom - 1,
   };
 
+  static constexpr bool isValidBuiltin(uint64_t Val) {
+    return Val >= FirstBuiltin && Val <= LastBuiltin;
+  }
+
   constexpr Tag(Kind Val) : Val(Val) {}
-  constexpr explicit Tag(uint64_t Val) : Val(Val) {}
+
+  static constexpr Tag fromStrTab(uint64_t Val) { return Tag(Custom + Val); }
+
+  static constexpr Tag fromRaw(uint64_t Val) { return Tag(Val); }
+
+  static constexpr Tag fromBuiltin(uint64_t Val) {
+    assert(isValidBuiltin(Val));
+    return Tag(Val);
+  }
 
   Kind getKind() const {
-    return static_cast<Kind>(Val >= FirstCustom ? FirstCustom : Val);
+    return static_cast<Kind>(Val <= LastBuiltin ? Val : Custom);
   }
 
   uint64_t getRaw() const { return Val; }
@@ -79,6 +97,8 @@ public:
       return false;
     }
   }
+
+  bool isBuiltin() { return Val < Custom; }
 
   StringRef getName() {
     switch (Val) {
@@ -101,7 +121,7 @@ public:
     case IRBlob:
       return "IRBlob";
     default:
-      return "Invalid";
+      return {};
     }
   }
 
@@ -115,9 +135,115 @@ public:
   friend bool operator<(const Tag &LHS, const Tag &RHS) {
     return LHS.Val < RHS.Val;
   }
+};
 
-private:
-  uint32_t Val;
+class TagSet {
+  uint64_t BuiltinTags = 0;
+  static_assert(Tag::LastBuiltin < sizeof(BuiltinTags) * CHAR_BIT);
+
+  SmallSet<Tag, 2> ExtraTags;
+
+public:
+  void insert(Tag TheTag) {
+    if (TheTag.isBuiltin()) {
+      BuiltinTags |= (1U << TheTag.getRaw());
+      return;
+    }
+    ExtraTags.insert(TheTag);
+  }
+
+  template <typename IterT> void insert(IterT I, IterT E) {
+    for (; I != E; ++I)
+      insert(*I);
+  }
+
+  template <typename Range> void insert_range(Range &&R) {
+    insert(adl_begin(R), adl_end(R));
+  }
+
+  void erase(Tag TheTag) {
+    if (TheTag.isBuiltin()) {
+      BuiltinTags &= ~(1U << TheTag.getRaw());
+      return;
+    }
+    ExtraTags.insert(TheTag);
+  }
+
+  bool contains(Tag TheTag) const {
+    if (TheTag.isBuiltin())
+      return BuiltinTags & (1U << TheTag.getRaw());
+    return ExtraTags.contains(TheTag);
+  }
+
+  class iterator {
+  private:
+    using It = typename SmallSet<Tag, 2>::const_iterator;
+
+    const TagSet *Parent;
+    uint32_t BitIndex;
+    It ExtraIt;
+
+    bool isBuiltin() const { return BitIndex <= Tag::LastBuiltin; }
+
+    void advance() {
+      if (isBuiltin()) {
+        do
+          ++BitIndex;
+        while (isBuiltin() && !(Parent->BuiltinTags & (1U << BitIndex)));
+        return;
+      }
+      ++ExtraIt;
+    }
+
+  public:
+    iterator(const TagSet *P, bool End = false)
+        : Parent(P), BitIndex(End ? Tag::LastBuiltin + 1 : 0),
+          ExtraIt(End ? Parent->ExtraTags.begin() : Parent->ExtraTags.end()) {
+      if (End)
+        return;
+      assert(BitIndex == 0);
+      if (!(Parent->BuiltinTags & 1))
+        advance();
+    }
+
+    Tag operator*() const {
+      if (isBuiltin())
+        return Tag::fromBuiltin(BitIndex);
+      return *ExtraIt;
+    }
+
+    iterator &operator++() {
+      advance();
+      return *this;
+    }
+
+    bool operator!=(const iterator &Other) const {
+      return BitIndex != Other.BitIndex || ExtraIt != Other.ExtraIt;
+    }
+  };
+
+  iterator begin() const { return iterator(this); }
+  iterator end() const { return iterator(this, true); }
+
+  bool operator==(const TagSet &Other) const {
+    return BuiltinTags == Other.BuiltinTags && ExtraTags == Other.ExtraTags;
+  }
+
+  bool operator!=(const TagSet &Other) const { return !(*this == Other); }
+
+  std::optional<Tag> containsAnyOf(std::initializer_list<Tag> TheTags) const {
+    for (auto TheTag : TheTags)
+      if (contains(TheTag))
+        return TheTag;
+    return std::nullopt;
+  }
+
+  bool containsAllOf(std::initializer_list<Tag> TheTags) const {
+    for (auto TheTag : TheTags)
+      if (!contains(TheTag))
+        return false;
+    return true;
+  }
 };
 
 /// A key-value pair with a debug location that is used to display the remarks
@@ -184,7 +310,7 @@ struct Remark {
   /// The type of the remark.
   Type RemarkType = Type::Unknown;
 
-  SmallVector<Tag, 2> Tags;
+  TagSet Tags;
 
   /// Name of the pass that triggers the emission of this remark.
   StringRef PassName;
@@ -228,21 +354,6 @@ struct Remark {
         return &Arg;
     }
     return nullptr;
-  }
-
-  bool hasTag(Tag TheTag) {
-    auto *It = find(Tags, TheTag);
-    return It != Tags.end();
-  }
-
-  std::optional<Tag> hasTag(std::initializer_list<Tag> TheTags) {
-    for (auto Tg : Tags) {
-      for (Tag TheTag : TheTags) {
-        if (Tg == TheTag)
-          return Tg;
-      }
-    }
-    return std::nullopt;
   }
 
 private:
@@ -302,9 +413,8 @@ inline bool operator<(const Argument &LHS, const Argument &RHS) {
 inline bool operator==(const Remark &LHS, const Remark &RHS) {
   return LHS.RemarkType == RHS.RemarkType && LHS.PassName == RHS.PassName &&
          LHS.RemarkName == RHS.RemarkName &&
-         LHS.FunctionName == RHS.FunctionName && LHS.Tags == RHS.Tags &&
-         LHS.Loc == RHS.Loc && LHS.Hotness == RHS.Hotness &&
-         LHS.Args == RHS.Args;
+         LHS.FunctionName == RHS.FunctionName && LHS.Loc == RHS.Loc &&
+         LHS.Hotness == RHS.Hotness && LHS.Args == RHS.Args;
 }
 
 inline bool operator!=(const Remark &LHS, const Remark &RHS) {
@@ -313,11 +423,9 @@ inline bool operator!=(const Remark &LHS, const Remark &RHS) {
 
 inline bool operator<(const Remark &LHS, const Remark &RHS) {
   return std::make_tuple(LHS.RemarkType, LHS.PassName, LHS.RemarkName,
-                         LHS.FunctionName, LHS.Tags, LHS.Loc, LHS.Hotness,
-                         LHS.Args) <
+                         LHS.FunctionName, LHS.Loc, LHS.Hotness, LHS.Args) <
          std::make_tuple(RHS.RemarkType, RHS.PassName, RHS.RemarkName,
-                         RHS.FunctionName, LHS.Tags, RHS.Loc, RHS.Hotness,
-                         RHS.Args);
+                         RHS.FunctionName, RHS.Loc, RHS.Hotness, RHS.Args);
 }
 
 inline raw_ostream &operator<<(raw_ostream &OS, const RemarkLocation &RLoc) {

@@ -346,7 +346,7 @@ void BitstreamRemarkSerializerHelper::emitRemark(const Remark &Remark,
     emitRemarkLoc(*Loc);
   }
 
-  for (auto& Tg : Remark.Tags) {
+  for (auto Tg : Remark.Tags) {
     emitTag(Tg);
   }
 

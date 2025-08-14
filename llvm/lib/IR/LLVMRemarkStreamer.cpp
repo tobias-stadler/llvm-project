@@ -83,12 +83,12 @@ LLVMRemarkStreamer::toRemark(const DiagnosticInfoOptimizationBase &Diag) {
         BCWrite.writeSymtab();
         BCWrite.writeStrtab();
         R.Blob = {BCBuf.data(), BCBuf.size()};
-        R.Tags.push_back(remarks::Tag::BitCodeBlob);
+        R.Tags.insert(remarks::Tag::BitCodeBlob);
       } else {
         raw_svector_ostream ModuleStrS(BCBuf);
         Arg.ModuleDump->print(ModuleStrS, nullptr);
         R.Blob = {BCBuf.data(), BCBuf.size()};
-        R.Tags.push_back(remarks::Tag::IRBlob);
+        R.Tags.insert(remarks::Tag::IRBlob);
       }
     }
   }

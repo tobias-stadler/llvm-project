@@ -15,7 +15,7 @@ using namespace llvm;
 
 #define DEBUG_TYPE "count-visits"
 
-STATISTIC(MaxVisited, "Max number of times we visited a function");
+GLOBAL_STATISTIC(MaxVisited, "Max number of times we visited a function");
 
 PreservedAnalyses CountVisitsPass::run(Function &F, FunctionAnalysisManager &) {
   uint32_t Count = Counts[F.getName()] + 1;

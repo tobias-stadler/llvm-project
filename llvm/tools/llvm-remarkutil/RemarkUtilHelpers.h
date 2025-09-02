@@ -43,6 +43,13 @@
           clEnumValN(Format::Bitstream, "bitstream", "Bitstream")),            \
       cl::sub(SUBOPT));
 
+#define OUTPUT_FORMAT_COMMAND_LINE_OPTIONS(SUBOPT)                             \
+  static cl::opt<Format> OutputFormat(                                         \
+      "o-format", cl::desc("Output remark format to serialize"),               \
+      cl::values(clEnumValN(Format::YAML, "yaml", "YAML"),                     \
+                 clEnumValN(Format::Bitstream, "bitstream", "Bitstream")),     \
+      cl::sub(SUBOPT));
+
 #define DEBUG_LOC_INFO_COMMAND_LINE_OPTIONS(SUBOPT)                            \
   static cl::opt<bool> UseDebugLoc(                                            \
       "use-debug-loc",                                                         \

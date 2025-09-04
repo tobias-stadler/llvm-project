@@ -48,6 +48,8 @@ class raw_fd_ostream;
 class StringRef;
 
 class TrackingStatistic {
+  friend class LocalTrackingStatistic;
+
 public:
   const char *const DebugType;
   const char *const Name;
@@ -129,6 +131,89 @@ protected:
   LLVM_ABI void RegisterStatistic();
 };
 
+class LocalTrackingStatistic {
+public:
+  TrackingStatistic *GlobalStat;
+  uint64_t Value = 0;
+  bool Initialized = false;
+
+  LocalTrackingStatistic(TrackingStatistic &Statistic)
+      : GlobalStat(&Statistic) {}
+
+  const char *getDebugType() const { return GlobalStat->DebugType; }
+  const char *getName() const { return GlobalStat->Name; }
+  const char *getDesc() const { return GlobalStat->Desc; }
+
+  uint64_t getValue() const { return Value; }
+
+  // Allow use of this class as the value itself.
+  operator uint64_t() const { return Value; }
+
+  const LocalTrackingStatistic &operator++() {
+    init();
+    ++*GlobalStat;
+    ++Value;
+    return *this;
+  }
+
+  uint64_t operator++(int) {
+    init();
+    ++*GlobalStat;
+    return Value++;
+  }
+
+  const LocalTrackingStatistic &operator+=(const uint64_t &V) {
+    init();
+    *GlobalStat += V;
+    Value += V;
+    return *this;
+  }
+
+  void updateMax(uint64_t V) {
+    init();
+    GlobalStat->updateMax(V);
+    Value = std::max(Value, V);
+  }
+
+public:
+  const LocalTrackingStatistic &operator=(uint64_t Val) {
+    init();
+    *GlobalStat = Val;
+    Value = Val;
+    return *this;
+  }
+
+  const LocalTrackingStatistic &operator--() {
+    init();
+    --*GlobalStat;
+    --Value;
+    return *this;
+  }
+
+  uint64_t operator--(int) {
+    init();
+    --*GlobalStat;
+    return Value--;
+  }
+
+  const LocalTrackingStatistic &operator-=(const uint64_t &V) {
+    init();
+    *GlobalStat -= V;
+    Value -= V;
+    return *this;
+  }
+
+protected:
+  void init() {
+    if (Initialized)
+      return;
+    Value = 0;
+    RegisterStatistic();
+  }
+
+  LLVM_ABI void RegisterStatistic();
+};
+
 class NoopStatistic {
 public:
   NoopStatistic(const char * /*DebugType*/, const char * /*Name*/,
@@ -157,15 +242,24 @@ public:
 };
 
 #if LLVM_ENABLE_STATS
-using Statistic = TrackingStatistic;
+using Statistic = LocalTrackingStatistic;
+using GlobalStatistic = TrackingStatistic;
 #else
 using Statistic = NoopStatistic;
+using GlobalStatistic = NoopStatistic;
 #endif
+
+#define GLOBAL_STATISTIC(VARNAME, DESC)                                        \
+  static llvm::GlobalStatistic VARNAME = {DEBUG_TYPE, #VARNAME, DESC}
+
+#define LOCAL_STATISTIC(VARNAME, DESC)                                         \
+  static llvm::GlobalStatistic VARNAME##_Global = {DEBUG_TYPE, #VARNAME,       \
+                                                   DESC};                      \
+  static thread_local llvm::Statistic VARNAME = {VARNAME##_Global}
 
 // STATISTIC - A macro to make definition of statistics really simple.  This
 // automatically passes the DEBUG_TYPE of the file into the statistic.
-#define STATISTIC(VARNAME, DESC)                                               \
-  static llvm::Statistic VARNAME = {DEBUG_TYPE, #VARNAME, DESC}
+#define STATISTIC(VARNAME, DESC) LOCAL_STATISTIC(VARNAME, DESC)
 
 // ALWAYS_ENABLED_STATISTIC - A macro to define a statistic like STATISTIC but
 // it is enabled even if LLVM_ENABLE_STATS is off.
@@ -202,6 +296,10 @@ LLVM_ABI void PrintStatisticsJSON(raw_ostream &OS);
 /// completes.
 LLVM_ABI std::vector<std::pair<StringRef, uint64_t>> GetStatistics();
 
+LLVM_ABI std::vector<
+    std::pair<StringRef, std::vector<std::pair<StringRef, uint64_t>>>>
+GetLocalStatistics();
+
 /// Reset the statistics. This can be used to zero and de-register the
 /// statistics in order to measure a compilation.
 ///
@@ -216,6 +314,8 @@ LLVM_ABI std::vector<std::pair<StringRef, uint64_t>> GetStatistics();
 /// this function is called and that only one compilation executes until calling
 /// GetStatistics().
 LLVM_ABI void ResetStatistics();
+
+LLVM_ABI void ResetLocalStatistics();
 
 } // end namespace llvm
 

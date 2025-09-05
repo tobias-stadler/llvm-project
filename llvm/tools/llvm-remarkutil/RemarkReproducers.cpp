@@ -56,29 +56,29 @@ static Error tryReproducers() {
         Stats[Arg.Key] += *Val;
       }
     }
-    if (!Remark.Blob)
-      continue;
-    auto Name = Remark.RemarkName;
-    auto NameIdx = ModuleIdx[Name]++;
-    StringRef Ext = ".txt";
-    if (Remark.Tags.contains(remarks::Tag::BitCodeBlob)) {
-      Ext = ".bc";
-    } else if (Remark.Tags.contains(remarks::Tag::IRBlob)) {
-      Ext = ".ll";
-    } else if (Remark.Tags.contains(remarks::Tag::GenericBinaryBlob)) {
-      Ext = ".blob";
-    }
-    std::error_code ErrorCode;
-    std::string DumpFile =
-        (Twine(Name) + (NameIdx != 0 ? "." + Twine(itostr(NameIdx)) : Twine()) +
-         Ext)
-            .str();
-    auto OF =
-        std::make_unique<ToolOutputFile>(DumpFile, ErrorCode, sys::fs::OF_Text);
-    if (ErrorCode)
-      return errorCodeToError(ErrorCode);
-
-    OF->os() << *Remark.Blob;
+    /*if (!Remark.Blob)*/
+    /*  continue;*/
+    /*auto Name = Remark.RemarkName;*/
+    /*auto NameIdx = ModuleIdx[Name]++;*/
+    /*StringRef Ext = ".txt";*/
+    /*if (Remark.Tags.contains(remarks::Tag::BitCodeBlob)) {*/
+    /*  Ext = ".bc";*/
+    /*} else if (Remark.Tags.contains(remarks::Tag::IRBlob)) {*/
+    /*  Ext = ".ll";*/
+    /*} else if (Remark.Tags.contains(remarks::Tag::GenericBinaryBlob)) {*/
+    /*  Ext = ".blob";*/
+    /*}*/
+    /*std::error_code ErrorCode;*/
+    /*std::string DumpFile =*/
+    /*    (Twine(Name) + (NameIdx != 0 ? "." + Twine(itostr(NameIdx)) : Twine()) +*/
+    /*     Ext)*/
+    /*        .str();*/
+    /*auto OF =*/
+    /*    std::make_unique<ToolOutputFile>(DumpFile, ErrorCode, sys::fs::OF_Text);*/
+    /*if (ErrorCode)*/
+    /*  return errorCodeToError(ErrorCode);*/
+    /**/
+    /*OF->os() << *Remark.Blob;*/
     OF->keep();
   }
   for (auto &Stat : Stats) {

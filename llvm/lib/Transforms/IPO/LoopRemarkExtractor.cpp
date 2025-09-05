@@ -160,9 +160,17 @@ bool LoopExtractionAnalyzer::runOnFunction(Function &F) {
   StripDebugInfo(ClonedM);
   OptimizationRemarkEmitter ORE(&F);
   ORE.emit([&]() {
+    std::string ModuleStr;
+    raw_string_ostream ModuleStrS(ModuleStr);
+    ClonedModPtr->print(ModuleStrS, nullptr);
     return OptimizationRemarkAnalysis(DEBUG_TYPE, "ModuleDump", &F)
-           << ore::NV("LoopIR", ClonedModPtr->getName().str(), &ClonedM);
+           << ore::NV("ModuleName", ClonedModPtr->getName())
+           << ore::NV("Module", ModuleStr);
   });
+  /*ORE.emit([&]() {*/
+  /*  return OptimizationRemarkAnalysis(DEBUG_TYPE, "ModuleDump", &F)*/
+  /*         << ore::NV("LoopIR", ClonedModPtr->getName().str(), &ClonedM);*/
+  /*});*/
 
   return false;
 }

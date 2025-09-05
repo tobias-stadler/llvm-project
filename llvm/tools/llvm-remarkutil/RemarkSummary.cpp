@@ -30,6 +30,7 @@ static cl::SubCommand Summary("summary", "Produce remark summaries");
 
 INPUT_FORMAT_COMMAND_LINE_OPTIONS(Summary)
 INPUT_OUTPUT_COMMAND_LINE_OPTIONS(Summary)
+OUTPUT_FORMAT_COMMAND_LINE_OPTIONS(Summary)
 
 struct FunctionSummary {
   std::optional<RemarkLocation> Loc;
@@ -58,7 +59,13 @@ static Error trySummary() {
   if (!MaybeParser)
     return MaybeParser.takeError();
 
-  auto MaybeSerializer = createRemarkSerializer(Format::YAML, OF->os());
+  Format OutFormat = (*MaybeParser)->ParserFormat;
+  if (OutputFileName == "-")
+    OutFormat = Format::YAML;
+  if (OutputFormat.getNumOccurrences())
+    OutFormat = OutputFormat.getValue();
+
+  auto MaybeSerializer = createRemarkSerializer(OutFormat, OF->os());
   if (!MaybeSerializer)
     return MaybeSerializer.takeError();
 

@@ -1678,7 +1678,6 @@ void LocalStatsInstrumentation::runAfterPass(StringRef PassID, Any IR) {
     R.RemarkName = "PassStatistics";
     R.FunctionName = F->getName();
     R.RemarkType = remarks::Type::Analysis;
-    R.Tags.insert(remarks::Tag::Statistics);
     for (auto &Stat : E.second) {
       R.Args.emplace_back(Stat.first, Str.add(itostr(Stat.second)).second);
     }

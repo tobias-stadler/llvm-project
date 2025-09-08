@@ -100,14 +100,10 @@ static Error tryFilter() {
   if (OutputFormat.getNumOccurrences())
     OutFormat = OutputFormat.getValue();
 
-  auto MaybeSerializer = createRemarkSerializer(OutFormat, OF->os());
-  if (!MaybeSerializer)
-    return MaybeSerializer.takeError();
-
   StringTable StrTab;
+  std::vector<std::unique_ptr<Remark>> Remarks;
 
   auto &Parser = **MaybeParser;
-  auto &Serializer = **MaybeSerializer;
   auto MaybeRemark = Parser.next();
   for (; MaybeRemark; MaybeRemark = Parser.next()) {
     Remark &Remark = **MaybeRemark;
@@ -120,7 +116,16 @@ static Error tryFilter() {
     if (TypeFilter && *TypeFilter != Remark.RemarkType)
       continue;
     StrTab.internalize(Remark);
-    Serializer.emit(Remark);
+    Remarks.push_back(std::move(*MaybeRemark));
+  }
+
+  auto MaybeSerializer =
+      createRemarkSerializer(OutFormat, SerializerMode::Standalone, OF->os(), std::move(StrTab));
+  if (!MaybeSerializer)
+    return MaybeSerializer.takeError();
+  auto &Serializer = **MaybeSerializer;
+  for (auto &R : Remarks) {
+    Serializer.emit(*R);
   }
 
   auto E = MaybeRemark.takeError();

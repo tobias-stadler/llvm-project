@@ -65,12 +65,7 @@ static Error trySummary() {
   if (OutputFormat.getNumOccurrences())
     OutFormat = OutputFormat.getValue();
 
-  auto MaybeSerializer = createRemarkSerializer(OutFormat, OF->os());
-  if (!MaybeSerializer)
-    return MaybeSerializer.takeError();
-
   auto &Parser = **MaybeParser;
-  auto &Serializer = **MaybeSerializer;
   auto MaybeRemark = Parser.next();
   StringMap<FunctionSummary> Summaries;
   for (; MaybeRemark; MaybeRemark = Parser.next()) {
@@ -109,9 +104,13 @@ static Error trySummary() {
     }
   }
 
+  StringTable StrTab;
+  std::vector<std::unique_ptr<Remark>> Remarks;
+
   std::list<std::string> Strs;
   for (auto &FSum : Summaries) {
-    remarks::Remark R;
+    auto RStr = std::make_unique<Remark>();
+    remarks::Remark &R = *RStr;
     if (FSum.second.Stats.empty())
       continue;
     R.FunctionName = FSum.first();
@@ -151,7 +150,17 @@ static Error trySummary() {
           "MostProfitThreshold",
           Strs.emplace_back(itostr(FSum.second.MostProfitable->Threshold)));
     }
-    Serializer.emit(R);
+    StrTab.internalize(R);
+    Remarks.push_back(std::move(RStr));
+  }
+
+  auto MaybeSerializer =
+      createRemarkSerializer(OutFormat, SerializerMode::Standalone, OF->os(), std::move(StrTab));
+  if (!MaybeSerializer)
+    return MaybeSerializer.takeError();
+  auto &Serializer = **MaybeSerializer;
+  for (auto &R : Remarks) {
+    Serializer.emit(*R);
   }
 
   auto E = MaybeRemark.takeError();

@@ -518,6 +518,8 @@ ENUM_CODEGENOPT(WinX64EHUnwindV2, WinX64EHUnwindV2Mode,
 /// Adds attributes that prevent outlining (`-mno-outline`)
 CODEGENOPT(DisableOutlining, 1, 0, Benign)
 
+VALUE_CODEGENOPT(OptRuns, 8, 1)
+
 /// FIXME: Make DebugOptions its own top-level .def file.
 #include "DebugOptions.def"
 

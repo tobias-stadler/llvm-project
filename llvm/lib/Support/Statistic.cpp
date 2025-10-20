@@ -113,7 +113,14 @@ public:
 
 static ManagedStatic<StatisticInfo> StatInfo;
 static ManagedStatic<sys::SmartMutex<true>> StatLock;
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wglobal-constructors"
+#endif
 static thread_local LocalStatisticInfo LocalStatInfo;
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 /// RegisterStatistic - The first time a statistic is bumped, this method is
 /// called.

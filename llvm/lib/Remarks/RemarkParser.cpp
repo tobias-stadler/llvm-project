@@ -118,6 +118,12 @@ extern "C" LLVMRemarkParserRef LLVMRemarkParserCreateBitstream(const void *Buf,
                           StringRef(static_cast<const char *>(Buf), Size)));
 }
 
+extern "C" LLVMRemarkParserRef LLVMRemarkParserCreateAuto(const void *Buf,
+                                                          uint64_t Size) {
+  return wrap(new CParser(Format::Auto,
+                          StringRef(static_cast<const char *>(Buf), Size)));
+}
+
 extern "C" LLVMRemarkEntryRef
 LLVMRemarkParserGetNext(LLVMRemarkParserRef Parser) {
   CParser &TheCParser = *unwrap(Parser);

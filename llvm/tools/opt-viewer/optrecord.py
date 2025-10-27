@@ -2,6 +2,8 @@
 
 from __future__ import print_function
 
+import warnings
+
 import io
 import yaml
 
@@ -24,6 +26,13 @@ import re
 
 import optpmap
 
+try:
+    import remarks as remarks_c_api
+
+    HAS_C_API = True
+except (ImportError, RuntimeError) as e:
+    HAS_C_API = False
+    C_API_ERROR = str(e)
 
 def itervalues(d):
     return iter(d.values())
@@ -271,17 +280,79 @@ class Failure(Missed):
     yaml_tag = "!Failure"
 
 
+def _remark_type_to_class(remark_type):
+    type_map = {
+        remarks_c_api.RemarkType.Passed: Passed,
+        remarks_c_api.RemarkType.Missed: Missed,
+        remarks_c_api.RemarkType.Analysis: Analysis,
+        remarks_c_api.RemarkType.AnalysisFPCommute: AnalysisFPCommute,
+        remarks_c_api.RemarkType.AnalysisAliasing: AnalysisAliasing,
+        remarks_c_api.RemarkType.Failure: Failure,
+    }
+    return type_map.get(remark_type, Remark)
+
+
+def _create_remark_from_c_api(entry):
+    remark_class = _remark_type_to_class(entry.remark_type)
+    if remark_class is None:
+        remark_class = Remark
+
+    remark = remark_class.__new__(remark_class)
+
+    remark.Pass = entry.pass_name
+    remark.Name = entry.remark_name
+    remark.Function = entry.function_name
+
+    if entry.debug_loc:
+        remark.DebugLoc = entry.debug_loc.to_dict()
+
+    remark.Hotness = entry.hotness if entry.hotness > 0 else 0
+
+    remark.Args = []
+    for arg in entry.args:
+        if arg.debug_loc:
+            remark.Args.append({arg.key: arg.value, "DebugLoc": arg.debug_loc.to_dict()})
+        else:
+            remark.Args.append({arg.key: arg.value})
+
+    return remark
+
+
 def get_remarks(input_file, filter_=None):
     max_hotness = 0
     all_remarks = dict()
     file_remarks = defaultdict(functools.partial(defaultdict, list))
 
+    filter_e = None
+    if filter_:
+        filter_e = re.compile(filter_)
+
+    if HAS_C_API:
+        try:
+            for entry in remarks_c_api.parse_file(input_file):
+                # print(entry.to_dict())
+                remark = _create_remark_from_c_api(entry)
+                remark.canonicalize()
+
+                if not hasattr(remark, "DebugLoc") or remark.key in all_remarks:
+                    continue
+
+                if filter_e and not filter_e.search(remark.Pass):
+                    continue
+
+                all_remarks[remark.key] = remark
+                file_remarks[remark.File][remark.Line].append(remark)
+
+                max_hotness = max(max_hotness, remark.Hotness)
+
+            return max_hotness, all_remarks, file_remarks
+        except Exception as e:
+            warnings.warn(f"Failed to parse file using libRemarks, falling back to YAMLParser: {e}");
+
+    # Fallback to YAML parser
     with io.open(input_file, encoding="utf-8") as f:
         docs = yaml.load_all(f, Loader=Loader)
 
-        filter_e = None
-        if filter_:
-            filter_e = re.compile(filter_)
         for remark in docs:
             remark.canonicalize()
             # Avoid remarks withoug debug location or if they are duplicated
@@ -346,6 +417,8 @@ def find_opt_files(*dirs_or_files):
                 for file in files:
                     if fnmatch.fnmatch(file, "*.opt.yaml*") or fnmatch.fnmatch(
                         file, "*.opt.ld.yaml*"
+                    ) or fnmatch.fnmatch(
+                        file, "*.opt.bitstream*"
                     ):
                         all.append(os.path.join(dir, file))
     return all

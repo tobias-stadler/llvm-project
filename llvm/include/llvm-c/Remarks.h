@@ -266,6 +266,20 @@ LLVM_C_ABI extern LLVMRemarkParserRef
 LLVMRemarkParserCreateBitstream(const void *Buf, uint64_t Size);
 
 /**
+ * Creates a remark parser that automatically detects the format of the buffer
+ * located in \p Buf of size \p Size bytes.
+ *
+ * \p Buf cannot be `NULL`.
+ *
+ * This function should be paired with LLVMRemarkParserDispose() to avoid
+ * leaking resources.
+ *
+ * \since REMARKS_API_VERSION=1
+ */
+LLVM_C_ABI extern LLVMRemarkParserRef
+LLVMRemarkParserCreateAuto(const void *Buf, uint64_t Size);
+
+/**
  * Returns the next remark in the file.
  *
  * The value pointed to by the return value needs to be disposed using a call to

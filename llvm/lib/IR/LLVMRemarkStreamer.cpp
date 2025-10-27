@@ -77,7 +77,8 @@ LLVMRemarkStreamer::toRemark(const DiagnosticInfoOptimizationBase &Diag) {
 
     if (Arg.ModuleDump) {
       BCBuf.clear();
-      if (RS.shouldEmitBinaryBlobs()) {
+      // if (RS.shouldEmitBinaryBlobs()) {
+      if (false) {
         BitcodeWriter BCWrite(BCBuf);
         BCWrite.writeModule(*Arg.ModuleDump);
         BCWrite.writeSymtab();

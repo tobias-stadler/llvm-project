@@ -367,7 +367,7 @@ void BitstreamRemarkSerializerHelper::emitRemark(const Remark &Remark,
 
   for (const Argument &Arg : Remark.Args) {
     R.clear();
-    auto MaybeIntVal = Arg.getValAsInt();
+    auto MaybeIntVal = Arg.getValAsInt<unsigned>();
 
     unsigned Opc = RECORD_REMARK_ARG_KV;
     if (Arg.Key == "String") {
@@ -428,11 +428,13 @@ void BitstreamRemarkSerializer::setup() {
   Helper.emplace(BitstreamRemarkContainerType::RemarksFile, OS);
   Helper->setupBlockInfo();
   Helper->emitMetaBlock();
+  Helper->enterRemarksBlock();
 }
 
 void BitstreamRemarkSerializer::finalize() {
   if (!Helper)
     return;
+  Helper->exitRemarksBlock();
   Helper->emitLateMetaBlock(*StrTab);
   Helper = std::nullopt;
 }

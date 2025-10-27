@@ -50,7 +50,7 @@ static Error tryReproducers() {
     Remark &Remark = **MaybeRemark;
     if (Remark.RemarkName == "FuncStats") {
       for (auto &Arg : Remark.Args) {
-        auto Val = Arg.getValAsInt();
+        auto Val = Arg.getValAsInt<unsigned>();
         if (!Val)
           return createStringError("Illegal FuncStats");
         Stats[Arg.Key] += *Val;
